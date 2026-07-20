@@ -5,3 +5,9 @@ __pycache__/
 .env
 .DS_Store
 *.ipynb_checkpoints
+
+# 교수 제출용 개인 아카이브 (zip/pdf/docx) - repo에는 정리된 소스만 유지
+박지수_머신러닝프로젝트*/
+박지수_머신러닝프로젝트*.zip
+박지수_머신러닝*.pdf
+~$*.docx
