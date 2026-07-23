@@ -187,7 +187,6 @@ def render_search(is_hitter, df, teams_df, pn_df, future_df, hm, hx, hl, pm, px,
             if not is_hitter:
                 pos = POS_KR.get(row.get("pitcher_role", "SP"), "선발투수")
             fa_yr = int(row["fa_year"])
-            age   = int(row["age_at_fa"]) + (2026 - int(row["fa_year"]))
             star  = int(row.get("star_score", 0))
 
             fa_status = get_player_fa_status(selected, fa_df)
