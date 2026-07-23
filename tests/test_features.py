@@ -29,6 +29,14 @@ def _pitcher_df():
         "war_3yr_sum": [5.0, 8.0],
         "games_3yr_avg": [50.0, 30.0],
         "pitcher_role": ["SU", "SP"],
+        "innings_3yr_avg": [60.0, 150.0],
+        "era_3yr_avg": [3.50, 3.00],
+        "whip_3yr_avg": [1.30, 1.10],
+        "win_3yr_avg": [3.0, 12.0],
+        "lose_3yr_avg": [2.0, 8.0],
+        "save_3yr_avg": [0.0, 0.0],
+        "hold_3yr_avg": [20.0, 0.0],
+        "hit_allowed_3yr_avg": [55.0, 140.0],
     })
 
 
@@ -66,11 +74,25 @@ def test_engineer_hitter_features_does_not_mutate_input():
     assert "market_level" not in original.columns
 
 
-def test_engineer_pitcher_features_adds_expected_columns():
+def test_engineer_pitcher_features_matches_trained_model_feature_list():
+    # 회귀 테스트: models/pitcher_model_meta.pkl의 "features"에 있는 모든 컬럼이
+    # 생성돼야 한다. 예전 구현은 role_SP/role_SU/war_per_game 등 학습 때 쓰이지
+    # 않은 이름을 만들어 배포 후 KeyError가 났었다.
     result = engineer_pitcher_features(_pitcher_df())
 
+    required = [
+        "hit_per_inn", "whip_era_ratio", "win_rate", "star_x_war",
+        "role_x_save", "role_x_hold", "role_x_inn",
+        "war_3yr_sum_pos_pct", "war_3yr_sum_all_pct",
+        "era_3yr_avg_pos_pct", "era_3yr_avg_all_pct",
+        "innings_3yr_avg_pos_pct", "innings_3yr_avg_all_pct",
+        "prime_years_left", "age_squared", "role_enc", "market_level",
+    ]
+    for col in required:
+        assert col in result.columns, f"missing column: {col}"
+
     assert result.loc[0, "age_squared"] == 31 ** 2
-    assert result.loc[0, "role_SU"] == 1
-    assert result.loc[0, "role_SP"] == 0
-    assert result.loc[1, "role_SP"] == 1
-    assert result.loc[0, "war_per_game"] == 5.0 / (50.0 * 3 + 1)
+    assert result.loc[0, "role_x_hold"] == 20.0  # SU 역할이라 hold_3yr_avg 그대로
+    assert result.loc[1, "role_x_inn"] == 150.0  # SP 역할이라 innings_3yr_avg 그대로
+    assert result.loc[0, "role_enc"] == 2  # "SU" -> 2 (CL=0, SP=1, SU=2)
+    assert result.loc[1, "role_enc"] == 1  # "SP" -> 1

@@ -41,7 +41,7 @@ def main():
             with st.spinner(""):
                 try:
                     h_df, p_df, teams, pn, future, fa_df = load_data()
-                    hm, hx, hl, pm, px, pr = load_models()
+                    hm, hx, hl, pm, px, pl, pr, ps = load_models()
                 except DataLoadError as e:
                     splash.empty()
                     st.error(f"⚠️ 서비스를 시작할 수 없습니다: {e}")
@@ -49,7 +49,8 @@ def main():
                     st.stop()
             st.session_state.update(dict(
                 ready=True, h_df=h_df, p_df=p_df, teams=teams,
-                pn=pn, future=future, fa_df=fa_df, hm=hm, hx=hx, hl=hl, pm=pm, px=px, pr=pr,
+                pn=pn, future=future, fa_df=fa_df, hm=hm, hx=hx, hl=hl,
+                pm=pm, px=px, pl=pl, pr=pr, ps=ps,
             ))
         splash.empty()
         st.rerun()
@@ -65,9 +66,9 @@ def main():
     with t_home:
         render_home(s.future)
     with t_hit:
-        render_search(True,  s.h_df, s.teams, s.pn, s.future, s.hm, s.hx, s.hl, s.pm, s.px, s.pr, s.fa_df)
+        render_search(True,  s.h_df, s.teams, s.pn, s.future, s.hm, s.hx, s.hl, s.pm, s.px, s.pl, s.pr, s.ps, s.fa_df)
     with t_pit:
-        render_search(False, s.p_df, s.teams, s.pn, s.future, s.hm, s.hx, s.hl, s.pm, s.px, s.pr, s.fa_df)
+        render_search(False, s.p_df, s.teams, s.pn, s.future, s.hm, s.hx, s.hl, s.pm, s.px, s.pl, s.pr, s.ps, s.fa_df)
 
 
 if __name__ == "__main__":

@@ -28,16 +28,26 @@ def engineer_hitter_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+PITCHER_ROLE_ENC = {"CL": 0, "SP": 1, "SU": 2}  # models/pitcher_*.pkl 학습 시 LabelEncoder 알파벳 순서와 동일
+
+
 def engineer_pitcher_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-    df["market_level"] = df.groupby("fa_year")["annual_avg_salary"].transform("median")
-    df["age_squared"] = df["age_at_fa"] ** 2
-    df["prime_left"] = (35 - df["age_at_fa"]).clip(0, 10)
-    df["war_per_game"] = df["war_3yr_sum"] / (df["games_3yr_avg"] * 3 + 1)
+    inn = df["innings_3yr_avg"].replace(0, pd.NA)
+    df["hit_per_inn"] = (df["hit_allowed_3yr_avg"] / inn).fillna(0)
+    df["whip_era_ratio"] = (df["whip_3yr_avg"] / df["era_3yr_avg"].replace(0, pd.NA)).fillna(1)
+    df["win_rate"] = (df["win_3yr_avg"] / (df["win_3yr_avg"] + df["lose_3yr_avg"]).replace(0, pd.NA)).fillna(0.5)
     df["star_x_war"] = df["star_score"] * df["war_3yr_sum"]
-    df["role_SP"] = (df["pitcher_role"] == "SP").astype(int)
-    df["role_SU"] = (df["pitcher_role"] == "SU").astype(int)
-    df["role_CL"] = (df["pitcher_role"] == "CL").astype(int)
+    df["role_x_save"] = (df["pitcher_role"] == "CL").astype(int) * df["save_3yr_avg"]
+    df["role_x_hold"] = (df["pitcher_role"] == "SU").astype(int) * df["hold_3yr_avg"]
+    df["role_x_inn"] = (df["pitcher_role"] == "SP").astype(int) * df["innings_3yr_avg"]
+    for col in ["war_3yr_sum", "era_3yr_avg", "innings_3yr_avg"]:
+        df[f"{col}_pos_pct"] = df.groupby("pitcher_role")[col].rank(pct=True)
+        df[f"{col}_all_pct"] = df[col].rank(pct=True)
+    df["prime_years_left"] = (35 - df["age_at_fa"]).clip(0, 10)
+    df["age_squared"] = df["age_at_fa"] ** 2
+    df["role_enc"] = df["pitcher_role"].map(PITCHER_ROLE_ENC).fillna(1).astype(int)
+    df["market_level"] = df.groupby("fa_year")["annual_avg_salary"].transform("median")
     return df
 
 
@@ -181,22 +191,44 @@ def build_future_pitcher_row(player_name, fr, p_stats_df, p_star_df, p_df):
     war_sum      = float(recent3["pitcherWar"].fillna(0).sum())
     war_avg      = war_sum / n_yrs
     games_avg    = float(avg3.get("pitcherGameCount", 0))
+    innings_avg  = float(avg3.get("pitcherInning", 0))
+    era_avg      = float(avg3.get("pitcherEra", 0))
+    whip_avg     = float(avg3.get("pitcherWhip", 0))
+    win_avg      = float(avg3.get("pitcherWin", 0))
+    lose_avg     = float(avg3.get("pitcherLose", 0))
+    hit_allowed_avg = float(avg3.get("pitcherHit", 0))
 
     recent_market = p_df[p_df["fa_year"] == p_df["fa_year"].max()]["annual_avg_salary"].median()
     if pd.isna(recent_market):
         recent_market = float(p_df["annual_avg_salary"].median())
 
+    # war_3yr_sum/era_3yr_avg/innings_3yr_avg의 역할군 내·전체 상대 순위
+    # (models/pitcher_*.pkl 학습 시 사용한 add_pct_ranks와 동일한 방식: 기존 선수 분포에 신규 선수를 더해 순위 계산)
+    ref = p_df[["pitcher_role", "war_3yr_sum", "era_3yr_avg", "innings_3yr_avg"]].copy()
+    ref["pitcher_role"] = ref["pitcher_role"].fillna("SP")
+    new_val = {"pitcher_role": role, "war_3yr_sum": war_sum, "era_3yr_avg": era_avg, "innings_3yr_avg": innings_avg}
+    ref = pd.concat([ref, pd.DataFrame([new_val])], ignore_index=True)
+    pct = {}
+    for col in ["war_3yr_sum", "era_3yr_avg", "innings_3yr_avg"]:
+        pct[f"{col}_all_pct"] = float(ref[col].rank(pct=True).iloc[-1])
+        pct[f"{col}_pos_pct"] = float(ref.groupby("pitcher_role")[col].rank(pct=True).iloc[-1])
+
+    inn_for_ratio = innings_avg if innings_avg else float("nan")
+    era_for_ratio = era_avg if era_avg else float("nan")
+    win_lose_sum = win_avg + lose_avg
+
     return pd.Series({
+        "fa_year":             int(fr["fa_year_expected"]),
         "age_at_fa":           age_at_fa,
         "games_3yr_avg":       games_avg,
-        "innings_3yr_avg":     float(avg3.get("pitcherInning", 0)),
-        "era_3yr_avg":         float(avg3.get("pitcherEra", 0)),
-        "whip_3yr_avg":        float(avg3.get("pitcherWhip", 0)),
-        "win_3yr_avg":         float(avg3.get("pitcherWin", 0)),
-        "lose_3yr_avg":        float(avg3.get("pitcherLose", 0)),
+        "innings_3yr_avg":     innings_avg,
+        "era_3yr_avg":         era_avg,
+        "whip_3yr_avg":        whip_avg,
+        "win_3yr_avg":         win_avg,
+        "lose_3yr_avg":        lose_avg,
         "save_3yr_avg":        save_avg,
         "hold_3yr_avg":        hold_avg,
-        "hit_allowed_3yr_avg": float(avg3.get("pitcherHit", 0)),
+        "hit_allowed_3yr_avg": hit_allowed_avg,
         "war_3yr_avg":         war_avg,
         "war_3yr_sum":         war_sum,
         "war_last_year":       float(last["pitcherWar"]) if not pd.isna(last["pitcherWar"]) else 0.0,
@@ -208,14 +240,18 @@ def build_future_pitcher_row(player_name, fr, p_stats_df, p_star_df, p_df):
         "national_team":       int(star.get("national_team", 0)),
         "postseason_experience": int(star.get("postseason_experience", 0)),
         "star_score":          star_score,
+        "hit_per_inn":         hit_allowed_avg / inn_for_ratio if inn_for_ratio == inn_for_ratio and inn_for_ratio != 0 else 0.0,
+        "whip_era_ratio":      whip_avg / era_for_ratio if era_for_ratio == era_for_ratio and era_for_ratio != 0 else 1.0,
+        "win_rate":            win_avg / win_lose_sum if win_lose_sum else 0.5,
+        "star_x_war":          star_score * war_sum,
+        "role_x_save":         save_avg if role == "CL" else 0.0,
+        "role_x_hold":         hold_avg if role == "SU" else 0.0,
+        "role_x_inn":          innings_avg if role == "SP" else 0.0,
+        **pct,
         "market_level":        float(recent_market),
         "age_squared":         age_at_fa ** 2,
-        "prime_left":          max(0, min(10, 35 - age_at_fa)),
-        "war_per_game":        war_sum / (games_avg * 3 + 1),
-        "star_x_war":          star_score * war_sum,
-        "role_SP":             1 if role == "SP" else 0,
-        "role_SU":             1 if role == "SU" else 0,
-        "role_CL":             1 if role == "CL" else 0,
+        "prime_years_left":    max(0, min(10, 35 - age_at_fa)),
+        "role_enc":            PITCHER_ROLE_ENC.get(role, 1),
         "pitcher_role":        role,
         "active_seasons":      active_seasons_p,
     })

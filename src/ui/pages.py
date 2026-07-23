@@ -94,7 +94,7 @@ def render_home(future_df):
         st.markdown("</div>", unsafe_allow_html=True)
 
 
-def render_search(is_hitter, df, teams_df, pn_df, future_df, hm, hx, hl, pm, px, pr, fa_df):
+def render_search(is_hitter, df, teams_df, pn_df, future_df, hm, hx, hl, pm, px, pl, pr, ps, fa_df):
     player_type = "hitter" if is_hitter else "pitcher"
     df_sorted = df.sort_values("fa_year", ascending=False)
     unique_past = df_sorted.drop_duplicates("player_name")["player_name"].tolist()
@@ -254,7 +254,7 @@ def render_search(is_hitter, df, teams_df, pn_df, future_df, hm, hx, hl, pm, px,
                 </div>""", unsafe_allow_html=True)
                 return
 
-            predicted = predict_h(future_pred_row, hx, hl, hm) if is_hitter else predict_p(future_pred_row, px, pr, pm)
+            predicted = predict_h(future_pred_row, hx, hl, hm) if is_hitter else predict_p(future_pred_row, px, pl, pr, ps, pm)
             current_sal = get_current_salary(selected, fa_df)
 
             st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -289,7 +289,7 @@ def render_search(is_hitter, df, teams_df, pn_df, future_df, hm, hx, hl, pm, px,
             st.markdown("</div>", unsafe_allow_html=True)
             return
 
-        predicted = predict_h(row, hx, hl, hm) if is_hitter else predict_p(row, px, pr, pm)
+        predicted = predict_h(row, hx, hl, hm) if is_hitter else predict_p(row, px, pl, pr, ps, pm)
         actual    = float(row.get("annual_avg_salary", np.nan))
         has_actual = not np.isnan(actual)
         lookup_pos = row["position"] if is_hitter else row.get("pitcher_role", "SP")

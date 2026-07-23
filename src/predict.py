@@ -13,7 +13,10 @@ def predict_h(row, xgb_m, lgb_m, meta):
     return float(np.expm1(lp))
 
 
-def predict_p(row, xgb_m, rf_m, meta):
+def predict_p(row, xgb_m, lgb_m, rf_m, stack_m, meta):
     X = row[meta["features"]].values.reshape(1, -1)
-    lp = meta["xgb_weight"] * xgb_m.predict(X)[0] + meta["rf_weight"] * rf_m.predict(X)[0]
+    xgb_p = xgb_m.predict(X)[0]
+    lgb_p = lgb_m.predict(X)[0]
+    rf_p = rf_m.predict(X)[0]
+    lp = stack_m.predict(np.array([[xgb_p, lgb_p, rf_p]]))[0]
     return float(np.expm1(lp))

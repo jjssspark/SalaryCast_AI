@@ -82,10 +82,12 @@ def load_models():
         hl = joblib.load(MODELS / "hitter_lgb_model.pkl")
         pm = joblib.load(MODELS / "pitcher_model_meta.pkl")
         px = joblib.load(MODELS / "pitcher_xgb_model.pkl")
+        pl = joblib.load(MODELS / "pitcher_lgb_model.pkl")
         pr = joblib.load(MODELS / "pitcher_rf_model.pkl")
+        ps = joblib.load(MODELS / "pitcher_meta_model.pkl")
     except FileNotFoundError as e:
         raise DataLoadError(f"모델 파일을 찾을 수 없습니다: {Path(e.filename).name}") from e
-    return hm, hx, hl, pm, px, pr
+    return hm, hx, hl, pm, px, pl, pr, ps
 
 
 @st.cache_data
