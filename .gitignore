@@ -11,3 +11,7 @@ __pycache__/
 박지수_머신러닝프로젝트*.zip
 박지수_머신러닝*.pdf
 ~$*.docx
+
+# Claude Code (로컬 전용 — 커밋하지 않음)
+CLAUDE.md
+.claude/
