@@ -32,7 +32,7 @@ XGBoost 기반 예측 모델과 Streamlit 시연 서비스로 이어집니다.
 |---|---|
 | ![투수 상세](docs/images/05-pitcher-detail.jpg) | ![예측 근거](docs/images/06-key-factor-detail.jpg) |
 
-> 배포 링크: _(Streamlit Community Cloud 배포 후 갱신 예정)_
+> 🔗 배포 링크: **[stovelens-ai.streamlit.app](https://stovelens-ai.streamlit.app/)**
 
 ---
 
