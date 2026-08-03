@@ -15,6 +15,16 @@ TEAM_EMOJI = {
     "키움 히어로즈": "🦸",
 }
 
+
+def team_emoji(team_name: str) -> str:
+    """'KIA', 'KIA 타이거즈' 등 축약형·풀네임 어느 쪽이 들어와도 매칭되도록 부분일치로 조회."""
+    if not team_name:
+        return "⚾"
+    for full_name, icon in TEAM_EMOJI.items():
+        if team_name in full_name or full_name in team_name:
+            return icon
+    return "⚾"
+
 TEAM_DATA = {
     "LG":  {"rank":1,  "budget":"상",  "win_now":True,  "needs":["외야수","우완불펜"],        "factor":1.08,
              "reason":"2025년 1위 팀. 즉시 우승에 기여할 FA 선수에게 공격적 투자 기조. 잠실 대형 구장 + 풍부한 모기업 지원으로 고액 계약 여력 충분."},

@@ -15,3 +15,6 @@ __pycache__/
 # Claude Code (로컬 전용 — 커밋하지 않음)
 CLAUDE.md
 .claude/
+
+# 원본 데모 영상 (용량 큼) — 압축본(docs/video/salarycast_demo.mp4)만 커밋
+docs/video/*.mov

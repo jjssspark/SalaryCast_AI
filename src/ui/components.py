@@ -393,13 +393,14 @@ def get_player_photo(player_name: str):
                 url = (
                     f"https://api-gw.sports.naver.com/statistics/categories/kbo"
                     f"/seasons/{year}/players?playerType={ptype}"
-                    f"&sortField={sort}&gameType=REGULAR_SEASON&page=1&pageSize=200"
+                    f"&field={sort}&direction=DESC&gameType=REGULAR_SEASON&page=1&pageSize=500"
                 )
                 resp = requests.get(url, headers=headers, timeout=8)
                 if resp.status_code != 200:
                     continue
                 data = resp.json()
-                players = (data.get("result", {}).get("players")
+                players = (data.get("result", {}).get("seasonPlayerStats")
+                           or data.get("result", {}).get("players")
                            or data.get("data", {}).get("players")
                            or data.get("players") or [])
                 for p in players:
@@ -452,7 +453,7 @@ def show_player_photo(player_name: str, size: int = 100):
     if url:
         st.markdown(
             f'<div style="text-align:center;margin-bottom:10px;">'
-            f'<img src="{url}" width="{size}" height="{size}" '
+            f'<img src="{url}" width="{size}" height="{size}" referrerpolicy="no-referrer" '
             f'style="border-radius:50%;object-fit:cover;border:2px solid #3a3a5c;"/>'
             f'</div>',
             unsafe_allow_html=True,

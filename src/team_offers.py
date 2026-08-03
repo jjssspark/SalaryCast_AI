@@ -6,7 +6,7 @@
 """
 import streamlit as st
 
-from src.constants import POS_KR, TEAM_DATA
+from src.constants import POS_KR, TEAM_DATA, team_emoji
 
 try:
     import plotly.graph_objects as go
@@ -28,13 +28,16 @@ def render_team_bars(offers, base, player_pos=None):
     rows = ""
     for _, r in offers.iterrows():
         pct = r["offer"] / max_offer * 100
-        color = "#C62828" if r["offer"] == max_offer else "#2c4a7e"
+        is_lead = r["offer"] == max_offer
+        color = "#C62828" if is_lead else "#2c4a7e"
+        lead_cls = " bar-fill-lead" if is_lead else ""
         abbr = r.get("team_abbr", r["team_name"][:2])
+        icon = team_emoji(r["team_name"])
         rows += f"""
         <div class="team-row">
-          <div class="team-name">{abbr}</div>
+          <div class="team-name">{icon} {abbr}</div>
           <div class="bar-bg">
-            <div class="bar-fill" style="width:{pct:.0f}%;background:{color};"></div>
+            <div class="bar-fill{lead_cls}" style="width:{pct:.0f}%;background:{color};"></div>
           </div>
           <div class="bar-val">{r['offer']:.1f}억</div>
         </div>"""
@@ -61,14 +64,17 @@ def render_future_team_bars(predicted, player_pos=None):
     for team, tdata in sorted_teams:
         offer = round(predicted * tdata["factor"], 1)
         pct = offer / max_offer * 100
-        color = "#C62828" if team == sorted_teams[0][0] else "#2c4a7e"
+        is_lead = team == sorted_teams[0][0]
+        color = "#C62828" if is_lead else "#2c4a7e"
+        lead_cls = " bar-fill-lead" if is_lead else ""
         low = round(offer * 0.9, 1)
         high = round(offer * 1.1, 1)
+        icon = team_emoji(team)
         rows += f"""
         <div class="team-row">
-          <div class="team-name">{team}</div>
+          <div class="team-name">{icon} {team}</div>
           <div class="bar-bg">
-            <div class="bar-fill" style="width:{pct:.0f}%;background:{color};"></div>
+            <div class="bar-fill{lead_cls}" style="width:{pct:.0f}%;background:{color};"></div>
           </div>
           <div class="bar-val" style="width:90px;">{low}~{high}억</div>
         </div>"""

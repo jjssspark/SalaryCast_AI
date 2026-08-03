@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from src.constants import POS_KR, TOOLTIPS
+from src.constants import POS_KR, TOOLTIPS, team_emoji
 from src.data_loader import load_season_stats
 from src.features import build_future_hitter_row, build_future_pitcher_row
 from src.predict import predict_h, predict_p
@@ -22,6 +22,7 @@ from src.ui.components import (
     _to_num,
     get_current_salary,
     get_player_fa_status,
+    get_player_photo,
     render_key_factors,
     show_player_photo,
 )
@@ -36,62 +37,143 @@ except ImportError:
 def render_home(future_df):
     st.markdown("""
     <div class="hero">
-      <h1>⚾ StoveLens AI</h1>
+      <span class="hero-spark" style="left:8%;top:70%;animation-delay:0s;"></span>
+      <span class="hero-spark" style="left:18%;top:32%;animation-delay:1.2s;"></span>
+      <span class="hero-spark" style="left:85%;top:62%;animation-delay:.6s;"></span>
+      <span class="hero-spark" style="left:72%;top:22%;animation-delay:2s;"></span>
+      <span class="hero-spark" style="left:93%;top:80%;animation-delay:2.6s;"></span>
+      <div class="hero-ball">⚾</div>
+      <h1>StoveLens <span class="accent">AI</span></h1>
       <p>KBO FA 선수 예상 연봉 & 구단별 관심도 분석</p>
       <div class="hero-badge">2018~2026 FA 계약 데이터 기반 · AI 예측 모델</div>
+      <div class="trust-bar">
+        <div class="trust-item"><span class="trust-num">140+</span><span class="trust-lbl">FA 계약 분석</span></div>
+        <div class="trust-item"><span class="trust-num">10</span><span class="trust-lbl">구단 제시가 비교</span></div>
+        <div class="trust-item"><span class="trust-num">2018–2026</span><span class="trust-lbl">시즌 데이터</span></div>
+      </div>
     </div>""", unsafe_allow_html=True)
 
     col1, col2 = st.columns(2, gap="large")
 
     with col1:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("**사용 방법**")
         st.markdown("""
-        <div class="how">
-          <div class="how-num">1</div>
-          <div class="how-txt">상단 탭에서 <strong>타자 찾기</strong> 또는 <strong>투수 찾기</strong>를 선택하세요</div>
-        </div>
-        <div class="how">
-          <div class="how-num">2</div>
-          <div class="how-txt">드롭다운에서 <strong>선수 이름</strong>을 선택하면 즉시 분석이 시작됩니다</div>
-        </div>
-        <div class="how">
-          <div class="how-num">3</div>
-          <div class="how-txt"><strong>예상 연봉</strong>과 <strong>구단별 관심도</strong>를 확인하세요
-          <br><span style="font-size:0.8rem;color:#888;">실제 계약 선수는 예측 vs 실제 비교도 제공됩니다</span></div>
+        <div class="card">
+          <div class="section-title">사용 방법</div>
+          <div class="how">
+            <div class="how-num">1</div>
+            <div class="how-txt">🔍 상단 탭에서 <strong>타자 찾기</strong> 또는 <strong>투수 찾기</strong>를 선택하세요</div>
+          </div>
+          <div class="how">
+            <div class="how-num">2</div>
+            <div class="how-txt">⚾ 드롭다운에서 <strong>선수 이름</strong>을 선택하면 즉시 분석이 시작됩니다</div>
+          </div>
+          <div class="how">
+            <div class="how-num">3</div>
+            <div class="how-txt">💰 <strong>예상 연봉</strong>과 <strong>구단별 관심도</strong>를 확인하세요
+            <br><span style="font-size:0.8rem;color:#888;">실제 계약 선수는 예측 vs 실제 비교도 제공됩니다</span></div>
+          </div>
         </div>""", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("**서비스 안내**")
         st.markdown("""
-        <p style="font-size:0.88rem;color:#555;line-height:1.8;margin:0;">
-        • <strong>분석 대상</strong>: 2018~2026 KBO FA 계약 완료 선수<br>
-        • <strong>예측 기반</strong>: 최근 3년 성적 + 나이 + 스타성 AI 분석<br>
-        • <strong>구단별 관심도</strong>: 포지션 필요도 · 재정 · 우승 욕구 반영<br>
-        • <strong>단위</strong>: 모든 연봉은 <strong>연평균(억 원)</strong> 기준
-        </p>""", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+        <div class="card">
+          <div class="section-title">서비스 안내</div>
+          <p style="font-size:0.88rem;color:#ccc;line-height:1.8;margin:0;">
+          • <strong>분석 대상</strong>: 2018~2026 KBO FA 계약 완료 선수<br>
+          • <strong>예측 기반</strong>: 최근 3년 성적 + 나이 + 스타성 AI 분석<br>
+          • <strong>구단별 관심도</strong>: 포지션 필요도 · 재정 · 우승 욕구 반영<br>
+          • <strong>단위</strong>: 모든 연봉은 <strong>연평균(억 원)</strong> 기준
+          </p>
+        </div>""", unsafe_allow_html=True)
 
     with col2:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("**다음 FA 주목 선수 (2027~2030)**")
-        st.markdown('<p style="font-size:0.8rem;color:#999;margin:0 0 12px 0;">실제 계약 전 · 예측 기능 준비 중</p>', unsafe_allow_html=True)
+        h_stats_df, p_stats_df, _, _ = load_season_stats()
         highlights = future_df[future_df["fa_grade"].isin(["A", "B"])].head(12)
-        for _, fr in highlights.iterrows():
+        fcards = []
+        for rank, (_, fr) in enumerate(highlights.iterrows(), 1):
+            name = fr["player_name"]
             pos_kr = POS_KR.get(fr["position"], fr["position"])
-            ptype = "타자" if fr["player_type"] == "hitter" else "투수"
+            is_hitter_p = fr["player_type"] == "hitter"
+            ptype = "타자" if is_hitter_p else "투수"
             grade = fr.get("fa_grade", "")
-            grade_txt = f'<span style="color:#C62828;font-weight:700">[{grade}급]</span> ' if pd.notna(grade) and grade else ""
-            st.markdown(f"""
-            <div class="fcard">
-              <div>
-                <div class="fcard-name">{fr['player_name']}</div>
-                <div class="fcard-meta">{grade_txt}{fr['team_2026']} · {pos_kr} · {ptype}</div>
-              </div>
-              <div class="fcard-year">{int(fr['fa_year_expected'])}년 FA</div>
-            </div>""", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+            grade_txt = f'<span style="color:#ff5252;font-weight:700">[{grade}급]</span> ' if pd.notna(grade) and grade else ""
+            team_icon = team_emoji(fr["team_2026"])
+
+            popup_html = _build_fa_popup(name, pos_kr, ptype, fr["team_2026"],
+                                          int(fr["fa_year_expected"]),
+                                          h_stats_df if is_hitter_p else p_stats_df, is_hitter_p)
+
+            fcards.append(
+                f'<div class="fcard"><div class="fcard-rank">{rank}</div><div style="flex:1;">'
+                f'<div class="fcard-name">{team_icon} {name}</div>'
+                f'<div class="fcard-meta">{grade_txt}{fr["team_2026"]} · {pos_kr} · {ptype}</div></div>'
+                f'<div class="fcard-year">{int(fr["fa_year_expected"])}년 FA</div>'
+                f'{popup_html}</div>'
+            )
+        card_html = (
+            '<div class="card"><div class="section-title">다음 FA 주목 선수 (2027~2030)</div>'
+            '<p style="font-size:0.8rem;color:#999;margin:-8px 0 12px 0;">실제 계약 전 · 예측 기능 준비 중 · 이름에 마우스를 올리면 프로필이 보여요</p>'
+            + "".join(fcards) + "</div>"
+        )
+        st.markdown(card_html, unsafe_allow_html=True)
+
+
+def _player_photo_html(name, size=128):
+    """검색 화면 player-hero용 원형 사진 HTML (한 번의 st.markdown 호출에 끼워 넣기 위해 문자열로 반환)."""
+    url = get_player_photo(name)
+    if url:
+        return (
+            f'<img src="{url}" alt="{name}" referrerpolicy="no-referrer" '
+            f'style="width:{size}px;height:{size}px;border-radius:50%;object-fit:cover;display:block;"/>'
+        )
+    initial = name[:1] if name else "?"
+    return (
+        f'<div style="width:{size}px;height:{size}px;border-radius:50%;'
+        f'background:linear-gradient(135deg,#1e3a5f,#4f8ef7);display:flex;align-items:center;'
+        f'justify-content:center;font-size:{size // 3}px;font-weight:800;color:#fff;">{initial}</div>'
+    )
+
+
+def _build_fa_popup(name, pos_kr, ptype, team_2026, fa_year, stat_df, is_hitter):
+    """FA 카드 호버 시 보여줄 미니 프로필 팝업 HTML (사진 + 소속 이력 + 최근 핵심 스탯)."""
+    photo_url = get_player_photo(name)
+    if photo_url:
+        photo_html = f'<img src="{photo_url}" alt="{name}" referrerpolicy="no-referrer"/>'
+    else:
+        initial = name[:1] if name else "?"
+        photo_html = (
+            f'<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;'
+            f'background:linear-gradient(135deg,#1e3a5f,#4f8ef7);color:#fff;font-weight:800;font-size:2.2rem;">'
+            f'{initial}</div>'
+        )
+
+    rows = stat_df[stat_df["playerName"] == name].sort_values("collect_year")
+    if not rows.empty:
+        years = rows["collect_year"].astype(int).tolist()
+        year_range = f"{years[0]}–{years[-1]}"
+        team_hist = " · ".join(list(dict.fromkeys(rows["teamName"].tolist()))[-4:])
+        last = rows.iloc[-1]
+        if is_hitter:
+            war = _to_num(pd.Series([last.get("hitterWar", 0)])).iloc[0]
+            ops = _to_num(pd.Series([last.get("hitterOps", 0)])).iloc[0]
+            stat_line = f"최근 시즌 WAR {war:.1f} · OPS {ops:.3f}"
+        else:
+            war = _to_num(pd.Series([last.get("pitcherWar", 0)])).iloc[0]
+            era = _to_num(pd.Series([last.get("pitcherEra", 0)])).iloc[0]
+            stat_line = f"최근 시즌 WAR {war:.1f} · ERA {era:.2f}"
+    else:
+        year_range, team_hist, stat_line = "기록 없음", "-", "-"
+
+    return (
+        '<div class="fcard-popup">'
+        f'<div class="fcard-popup-photo">{photo_html}</div>'
+        f'<div class="fcard-popup-name">{name}</div>'
+        f'<div class="fcard-popup-row">⚾ {pos_kr} · {ptype}</div>'
+        f'<div class="fcard-popup-row">🏟️ {team_2026} · FA 예정 {fa_year}년</div>'
+        f'<div class="fcard-popup-row">📅 최근 기록 {year_range}</div>'
+        f'<div class="fcard-popup-row">🔁 소속 이력 {team_hist}</div>'
+        f'<div class="fcard-popup-row">📊 {stat_line}</div>'
+        '</div>'
+    )
 
 
 def render_search(is_hitter, df, teams_df, pn_df, future_df, hm, hx, hl, pm, px, pl, pr, ps, fa_df):
@@ -136,21 +218,23 @@ def render_search(is_hitter, df, teams_df, pn_df, future_df, hm, hx, hl, pm, px,
             else:
                 pos = POS_KR.get(fr["position"], fr["position"])
 
-            show_player_photo(selected, size=90)
-            st.markdown('<div class="card">', unsafe_allow_html=True)
-            st.markdown(f"""
-            <div style="text-align:center;padding:8px 0 16px 0;">
-              <div class="player-title">{selected}</div>
-              <div style="margin:6px 0;">
-                <span class="tag">{pos}</span>
-                <span class="tag">{fr['team_2026']}</span>
-                <span class="tag tag-red">FA 예정 {fa_yr_exp}년</span>
-              </div>
-              <div style="font-size:1.1rem;margin-top:6px;">{star_str}</div>
-            </div>""", unsafe_allow_html=True)
-
+            badges_html = (
+                f'<span class="tag">{pos}</span>'
+                f'<span class="tag">{fr["team_2026"]}</span>'
+                f'<span class="tag tag-red">FA 예정 {fa_yr_exp}년</span>'
+            )
+            st.markdown(
+                f'<div class="player-hero">'
+                f'<div class="player-photo-ring">{_player_photo_html(selected, 128)}</div>'
+                f'<div class="player-title">{selected}</div>'
+                f'<div style="margin:6px 0;">{badges_html}</div>'
+                f'<div style="font-size:1.1rem;margin-top:6px;">{star_str}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            stats_html = ""
             if future_pred_row is not None:
-                st.markdown('<p style="font-size:0.85rem;font-weight:700;color:#444;margin:0 0 6px 0;">최근 3년 성적</p>', unsafe_allow_html=True)
+                stats_html += '<p style="font-size:0.85rem;font-weight:700;color:#ccc;margin:0 0 6px 0;">최근 3년 성적</p>'
                 f_stats = ([
                     ("팀 기여도 (WAR)", f"{future_pred_row.get('war_3yr_sum', 0):.1f}"),
                     ("출루+장타 (OPS)", f"{future_pred_row.get('ops_3yr_avg', 0):.3f}"),
@@ -167,19 +251,20 @@ def render_search(is_hitter, df, teams_df, pn_df, future_df, hm, hx, hl, pm, px,
                 for lbl, val in f_stats:
                     tip = TOOLTIPS.get(lbl, "")
                     title_attr = f' title="{tip}"' if tip else ""
-                    st.markdown(
+                    stats_html += (
                         f'<div class="stat-row">'
                         f'<span class="stat-lbl"{title_attr}>{lbl}</span>'
                         f'<span class="stat-val">{val}</span>'
-                        f'</div>',
-                        unsafe_allow_html=True,
+                        f'</div>'
                     )
+            if stats_html:
+                st.markdown(f'<div class="card">{stats_html}</div>', unsafe_allow_html=True)
+            if future_pred_row is not None:
                 if st.button("📊 최근 3년 성적 자세히 보기 →", key=f"detail_btn_f_{selected}"):
                     st.session_state["page"] = "detail"
                     st.session_state["detail_player"] = selected
                     st.session_state["detail_type"] = player_type
                     st.rerun()
-            st.markdown("</div>", unsafe_allow_html=True)
         else:
             row = df[df["player_name"] == selected].iloc[0]
 
@@ -190,8 +275,6 @@ def render_search(is_hitter, df, teams_df, pn_df, future_df, hm, hx, hl, pm, px,
             star  = int(row.get("star_score", 0))
 
             fa_status = get_player_fa_status(selected, fa_df)
-            show_player_photo(selected, size=90)
-            st.markdown('<div class="card">', unsafe_allow_html=True)
             star_str = "★" * min(star, 5) if star > 0 else ""
             if fa_status["status"] == "계약중":
                 badges_html = (
@@ -206,14 +289,17 @@ def render_search(is_hitter, df, teams_df, pn_df, future_df, hm, hx, hl, pm, px,
                     f'<span class="tag">{fa_yr}년 FA 종료</span>'
                     f'<span class="tag tag-red">재FA 가능</span>'
                 )
-            st.markdown(f"""
-            <div style="text-align:center;padding:8px 0 16px 0;">
-              <div class="player-title">{selected}</div>
-              <div style="margin:6px 0;">{badges_html}</div>
-              <div style="font-size:1.1rem;margin-top:6px;">{star_str}</div>
-            </div>""", unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="player-hero">'
+                f'<div class="player-photo-ring">{_player_photo_html(selected, 128)}</div>'
+                f'<div class="player-title">{selected}</div>'
+                f'<div style="margin:6px 0;">{badges_html}</div>'
+                f'<div style="font-size:1.1rem;margin-top:6px;">{star_str}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
-            st.markdown('<p style="font-size:0.85rem;font-weight:700;color:#444;margin:0 0 6px 0;">최근 3년 성적</p>', unsafe_allow_html=True)
+            stats_html = '<p style="font-size:0.85rem;font-weight:700;color:#ccc;margin:0 0 6px 0;">최근 3년 성적</p>'
             stats = ([
                 ("팀 기여도 (WAR)", f"{row.get('war_3yr_sum', 0):.1f}"),
                 ("출루+장타 (OPS)", f"{row.get('ops_3yr_avg', 0):.3f}"),
@@ -230,19 +316,18 @@ def render_search(is_hitter, df, teams_df, pn_df, future_df, hm, hx, hl, pm, px,
             for lbl, val in stats:
                 tip = TOOLTIPS.get(lbl, "")
                 title_attr = f' title="{tip}"' if tip else ""
-                st.markdown(
+                stats_html += (
                     f'<div class="stat-row">'
                     f'<span class="stat-lbl"{title_attr}>{lbl}</span>'
                     f'<span class="stat-val">{val}</span>'
-                    f'</div>',
-                    unsafe_allow_html=True,
+                    f'</div>'
                 )
+            st.markdown(f'<div class="card">{stats_html}</div>', unsafe_allow_html=True)
             if st.button("📊 최근 3년 성적 자세히 보기 →", key=f"detail_btn_{selected}"):
                 st.session_state["page"] = "detail"
                 st.session_state["detail_player"] = selected
                 st.session_state["detail_type"] = player_type
                 st.rerun()
-            st.markdown("</div>", unsafe_allow_html=True)
 
     with col_right:
         if is_future_only:
@@ -257,36 +342,29 @@ def render_search(is_hitter, df, teams_df, pn_df, future_df, hm, hx, hl, pm, px,
             predicted = predict_h(future_pred_row, hx, hl, hm) if is_hitter else predict_p(future_pred_row, px, pl, pr, ps, pm)
             current_sal = get_current_salary(selected, fa_df)
 
-            st.markdown('<div class="card">', unsafe_allow_html=True)
             cur_sal_html = ""
             if current_sal is not None:
                 cur_sal_html = (f'<div style="text-align:center;padding-bottom:10px;">'
                                 f'<span style="font-size:0.82rem;color:#aaa;">현재 연봉 (2026)</span>'
                                 f'<span style="font-size:1.1rem;font-weight:700;color:#88bbff;margin-left:10px;">약 {current_sal:.1f}억 원</span>'
                                 f'</div>')
-            st.markdown(f"""
-            <div class="salary-box">
-              {cur_sal_html}
-              <div class="salary-label">AI 예상 FA 연봉</div>
-              <div class="salary-num">{predicted:.1f}<span class="salary-unit"> 억 원</span></div>
-            </div>
-            <p style="font-size:0.78rem;color:#888;text-align:center;margin:4px 0 0 0;">
-              {int(fr['fa_year_expected'])}년 FA 기준 · 최근 3년 성적 기반 예측
-            </p>""", unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="card"><div class="salary-box">{cur_sal_html}'
+                f'<div class="salary-label">AI 예상 FA 연봉</div>'
+                f'<div class="salary-num">{predicted:.1f}<span class="salary-unit"> 억 원</span></div></div>'
+                f'<p style="font-size:0.78rem;color:#888;text-align:center;margin:4px 0 0 0;">'
+                f'{int(fr["fa_year_expected"])}년 FA 기준 · 최근 3년 성적 기반 예측</p></div>',
+                unsafe_allow_html=True,
+            )
 
-            st.markdown('<div class="card">', unsafe_allow_html=True)
             xgb_m_kf = hx if is_hitter else px
             feat_kf = hm["features"] if is_hitter else pm["features"]
             _kp = ("fh" if is_hitter else "fp") + "_" + selected
             render_key_factors(future_pred_row, xgb_m_kf, feat_kf, df, player_name=selected, key_prefix=_kp)
-            st.markdown("</div>", unsafe_allow_html=True)
 
-            st.markdown('<div class="card">', unsafe_allow_html=True)
-            st.markdown('<p style="font-weight:700;font-size:0.95rem;color:#0d1b35;margin:0 0 6px 0;">구단별 예상 제시가</p>', unsafe_allow_html=True)
+            st.markdown('<div class="section-title" style="margin-top:6px;">구단별 예상 제시가</div>', unsafe_allow_html=True)
             _fpos = future_pred_row.get("pitcher_role", "SP") if not is_hitter else fr["position"]
             render_future_team_bars(predicted, player_pos=_fpos)
-            st.markdown("</div>", unsafe_allow_html=True)
             return
 
         predicted = predict_h(row, hx, hl, hm) if is_hitter else predict_p(row, px, pl, pr, ps, pm)
@@ -295,13 +373,7 @@ def render_search(is_hitter, df, teams_df, pn_df, future_df, hm, hx, hl, pm, px,
         lookup_pos = row["position"] if is_hitter else row.get("pitcher_role", "SP")
 
         # 예상 연봉 카드
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown(f"""
-        <div class="salary-box">
-          <div class="salary-label">AI 예상 연봉 (연평균)</div>
-          <div class="salary-num">{predicted:.1f}<span class="salary-unit"> 억 원</span></div>
-        </div>""", unsafe_allow_html=True)
-
+        cmp_html = ""
         if has_actual:
             diff = predicted - actual
             diff_pct = abs(diff) / actual * 100
@@ -312,35 +384,33 @@ def render_search(is_hitter, df, teams_df, pn_df, future_df, hm, hx, hl, pm, px,
                 verdict, v_color, v_desc = "저평가", "#1565c0", "실제 계약금이 AI 예측보다 낮습니다"
             else:
                 verdict, v_color, v_desc = "적정", "#2e7d32", "예측과 실제 계약금이 유사합니다"
-            st.markdown(f"""
-            <div class="cmp-wrap">
-              <div class="cmp-box">
-                <div class="cmp-lbl">실제 계약 연봉</div>
-                <div class="cmp-val" style="color:#1b5e20;">{actual:.1f}<span style="font-size:1rem;"> 억</span></div>
-              </div>
-              <div class="cmp-box">
-                <div class="cmp-lbl">계약 평가</div>
-                <div style="font-size:1.4rem;font-weight:900;color:{v_color};margin-top:4px;">{verdict}</div>
-              </div>
-            </div>
-            <p style="font-size:0.78rem;color:#777;text-align:center;margin-top:4px;">{v_desc} · 오차 {diff_pct:.0f}%</p>""", unsafe_allow_html=True)
+            cmp_html = (
+                f'<div class="cmp-wrap">'
+                f'<div class="cmp-box"><div class="cmp-lbl">실제 계약 연봉</div>'
+                f'<div class="cmp-val" style="color:#1b5e20;">{actual:.1f}<span style="font-size:1rem;"> 억</span></div></div>'
+                f'<div class="cmp-box"><div class="cmp-lbl">계약 평가</div>'
+                f'<div style="font-size:1.4rem;font-weight:900;color:{v_color};margin-top:4px;">{verdict}</div></div>'
+                f'</div>'
+                f'<p style="font-size:0.78rem;color:#777;text-align:center;margin-top:4px;">{v_desc} · 오차 {diff_pct:.0f}%</p>'
+            )
+        st.markdown(
+            f'<div class="card"><div class="salary-box">'
+            f'<div class="salary-label">AI 예상 연봉 (연평균)</div>'
+            f'<div class="salary-num">{predicted:.1f}<span class="salary-unit"> 억 원</span></div>'
+            f'</div>{cmp_html}</div>',
+            unsafe_allow_html=True,
+        )
 
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        # 핵심 요소 카드
-        st.markdown('<div class="card">', unsafe_allow_html=True)
+        # 핵심 요소
         xgb_m_kf = hx if is_hitter else px
         feat_kf = hm["features"] if is_hitter else pm["features"]
         _kp = ("ph" if is_hitter else "pp") + "_" + selected
         render_key_factors(row, xgb_m_kf, feat_kf, df, player_name=selected, key_prefix=_kp)
-        st.markdown("</div>", unsafe_allow_html=True)
 
-        # 구단별 관심도 카드
+        # 구단별 관심도
         offers = team_offers(predicted, lookup_pos, teams_df, pn_df)
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown('<p style="font-weight:700;font-size:0.95rem;color:#0d1b35;margin:0 0 6px 0;">구단별 예상 제시가</p>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title" style="margin-top:6px;">구단별 예상 제시가</div>', unsafe_allow_html=True)
         render_team_bars(offers, predicted, player_pos=lookup_pos)
-        st.markdown("</div>", unsafe_allow_html=True)
 
         with st.expander("분석 상세 보기"):
             st.markdown("##### 모델 성능 지표")
