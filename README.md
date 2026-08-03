@@ -209,4 +209,4 @@ flowchart TD
 - 타자/투수 모델을 완전히 분리 학습하고, 총액·계약기간 등 데이터 누수 컬럼을 학습 피처에서 제외했다.
 - 1차 연봉 예측(XGBoost/LightGBM)과 2차 구단별 제시가 보정(도메인 규칙)을 분리해서 설계했다.
 
-**프로젝트 회고 및 진행 기록**: _(Notion 링크 추가 예정)_
+**프로젝트 회고 및 진행 기록**: [Notion →](https://app.notion.com/p/SalaryCast_AI-00af6f1e619a82c4b882016d34088dd1?source=copy_link)
