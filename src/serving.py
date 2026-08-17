@@ -106,16 +106,35 @@ def league_of(context: Context, is_hitter: bool) -> dict:
 
 
 
-def market_level_for(fa: pd.DataFrame, fa_year: int) -> float:
-    """직전 3년 FA 계약의 연평균 중앙값.
+def market_level_for(fa: pd.DataFrame, fa_year: int, is_hitter: bool) -> float:
+    """직전 3년 FA 계약의 연평균 중앙값. 타자와 투수를 나눠서 센다.
 
-    아직 오지 않은 FA 연도는 직전 3년이 데이터 범위 밖일 수 있다.
-    그때는 우리가 아는 가장 최근 3개 연도를 쓴다.
+    학습이 그렇게 만든다 — scripts/build_training_v8.py가 fa를 fa_hitters와
+    fa_pitchers로 쪼개 넘긴다. 투수 시장이 타자보다 눅어서 한 덩어리로 세면
+    2025년 기준 타자 11.5억 / 투수 6.1억이 둘 다 9.75억이 된다.
+
+    직전 3년이 비는 경우가 둘인데 서로 다르게 다뤄야 한다.
+
+    하나는 가장 이른 FA 연도(2018)다. 과거가 없어서 비는 것이라 그해 계약의
+    중앙값을 쓴다. 여기서 최신 시장 수준을 쓰면 2018년 계약을 2027년 시세로
+    환산하게 된다.
+
+    다른 하나는 아직 오지 않은 FA 연도다. 미래라서 비는 것이므로 우리가 아는
+    가장 최근 3개 연도를 쓴다.
+
+    v9는 이 값이 예측의 곱셈 계수라, 어긋나면 예측이 그만큼 밀린다.
     """
-    level = market_level_prior(fa, fa_year)
+    same_type = fa[(fa["position"] == "P") != is_hitter]
+
+    level = market_level_prior(same_type, fa_year)
     if not pd.isna(level):
         return float(level)
-    return float(market_level_prior(fa, int(fa["fa_year"].max()) + 1))
+
+    same_year = same_type[same_type["fa_year"] == fa_year]["annual_avg_salary"]
+    if len(same_year):
+        return float(same_year.median())
+
+    return float(market_level_prior(same_type, int(same_type["fa_year"].max()) + 1))
 
 
 def _is_hitter(context: Context, player_id: int) -> bool:
@@ -231,7 +250,7 @@ def build_card(context: Context, player_id: int) -> Card:
         age_at_fa=resolve_age_at(name, fa_year, context.fa, context.birth, player_id),
         group_value=group_value,
         star=star,
-        market_level=market_level_for(context.fa, fa_year),
+        market_level=market_level_for(context.fa, fa_year, is_hitter),
         reference=bundle["reference"],
         is_hitter=is_hitter,
     )

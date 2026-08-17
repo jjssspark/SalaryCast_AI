@@ -150,12 +150,12 @@ def _merge_manual_photos(photos: pd.DataFrame) -> pd.DataFrame:
 def _load_bundle(label: str) -> dict:
     """meta에 적힌 멤버 모델만 읽는다. 블렌드 구성이 바뀌어도 로더는 그대로다."""
     try:
-        meta = joblib.load(MODELS / f"{label}_v8_meta.pkl")
+        meta = joblib.load(MODELS / f"{label}_v9_meta.pkl")
         models = {
-            name: joblib.load(MODELS / f"{label}_v8_{name.lower()}.pkl")
+            name: joblib.load(MODELS / f"{label}_v9_{name.lower()}.pkl")
             for name in meta["members"]
         }
-        reference = joblib.load(MODELS / f"reference_dist_{label}_v8.pkl")
+        reference = joblib.load(MODELS / f"reference_dist_{label}_v9.pkl")
     except FileNotFoundError as exc:
         raise DataLoadError(
             f"모델 파일을 찾을 수 없습니다: {Path(exc.filename).name}"

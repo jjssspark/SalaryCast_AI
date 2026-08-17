@@ -29,12 +29,42 @@ def to_frame(row, features: list[str]) -> pd.DataFrame:
     return pd.DataFrame([{name: source.get(name, np.nan) for name in features}])[features]
 
 
+def _part_log(row, models: dict, part: dict) -> float:
+    """구성 하나의 로그 예측. 모델 이름 앞에 part의 접두사가 붙는다."""
+    X = to_frame(row, part["features"]).astype(float)
+    prefix = part.get("prefix", "")
+
+    if part["blend_second"]:
+        weight = float(part["weight"])
+        first = models[f"{prefix}{part['blend_first']}"].predict(X)[0]
+        second = models[f"{prefix}{part['blend_second']}"].predict(X)[0]
+        return weight * first + (1 - weight) * second
+
+    return models[f"{prefix}{part['blend_first']}"].predict(X)[0]
+
+
 def predict_salary(row, bundle: dict) -> float:
     """연평균 계약금 예측값(억 원)."""
     meta = bundle["meta"]
     models = bundle["models"]
-    X = to_frame(row, meta["features"]).astype(float)
 
+    # v9: 연봉을 그대로 맞히는 예측과 시장 수준 대비 비율로 맞히는 예측을 섞는다.
+    # 트리 모델은 fa_year를 외삽하지 못해 미래로 갈수록 연봉을 낮게 부른다.
+    # 비율 쪽은 추세를 시장 지표가 담당하므로 그 편향이 덜하다.
+    if meta.get("target_mode") == "mix":
+        source = row if isinstance(row, dict) else row.to_dict()
+        level = source.get("market_level")
+        base = _part_log(row, models, meta["parts"]["base"])
+
+        # 시장 수준을 모르면 비율을 되돌릴 수 없다. 그때는 base만 쓴다.
+        if level is None or pd.isna(level):
+            return float(max(0.0, np.expm1(base)))
+
+        adjusted = _part_log(row, models, meta["parts"]["ratio"]) + np.log1p(float(level))
+        weight = float(meta["mix_weight"])
+        return float(max(0.0, np.expm1(weight * base + (1 - weight) * adjusted)))
+
+    X = to_frame(row, meta["features"]).astype(float)
     if meta["method"].startswith("blend:"):
         weight = float(meta["weight"])
         first = models[meta["blend_first"]].predict(X)[0]
