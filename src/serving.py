@@ -128,12 +128,21 @@ def _past_contract(context: Context, player_id: int, name: str) -> pd.Series | N
 
     FA 계약 파일에는 player_id가 없어 이름으로 찾는데, 같은 이름이 96쌍 있다.
     학습 때 쓴 것과 같은 방식으로 실제 당사자인지 확인한다.
+
+    유형(타자/투수)을 먼저 거른다. resolve_player_id는 타자와 투수로 갈린 시즌
+    테이블 안에서 동명이인을 가리는데, 그 안에서 이름이 유일해지면 소속팀을
+    대조하기 전에 그대로 반환한다. 그래서 투수 김현수에게 타자 김현수의 계약이,
+    타자 최원준에게 투수 최원준의 계약이 붙었다.
     """
-    same_name = context.fa[context.fa["player_name"] == name]
+    is_hitter = _is_hitter(context, player_id)
+    same_name = context.fa[
+        (context.fa["player_name"] == name)
+        & ((context.fa["position"] == "P") != is_hitter)
+    ]
     if same_name.empty:
         return None
 
-    seasons = _seasons_of(context, _is_hitter(context, player_id))
+    seasons = _seasons_of(context, is_hitter)
     for _, contract in same_name.sort_values("fa_year", ascending=False).iterrows():
         resolved = resolve_player_id(
             seasons, name, contract["team"], int(contract["fa_year"])
