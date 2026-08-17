@@ -1,551 +1,388 @@
-"""StoveLens AI — 재사용 UI 컴포넌트 및 헬퍼 함수.
+"""StoveLens AI — 화면 조각을 HTML 문자열로 만든다.
 
-호출 위치: src/ui/pages.py(render_home, render_search, show_detail_page)가 이 모듈의
-함수들을 호출.
-데이터 파일: 직접 read 없음 — 호출부에서 넘긴 DataFrame/row를 가공. get_player_photo만
-네이버 스포츠 공개 API(sports.naver.com)를 조회.
-사용자 지시: Notion Day3 체크리스트 "src/ 디렉터리 설계: ui/".
+호출 위치: src/ui/home.py, src/ui/player.py
+데이터 파일 없음. serving.Card와 league.compare() 결과만 받는다.
+
+Streamlit 위젯으로는 목업(output/mockups/design_v3.html)의 전광판·벤토·티커를
+만들 수 없어서 HTML을 직접 쓴다. 여기 함수는 전부 문자열만 돌려주고
+st.markdown 호출은 하지 않는다. 화면 조립과 값 계산을 섞지 않기 위해서다.
+
+선수 이름·팀명은 데이터에서 온 문자열이라 그대로 넣지 않고 escape한다.
 """
-import numpy as np
-import pandas as pd
-import requests
-import streamlit as st
 
-from src.constants import LOWER_IS_BETTER, POS_KR, STAT_INFO, STAT_LABEL_MAP, TEAM_LOGO
+from __future__ import annotations
 
-try:
-    from scipy import stats as scipy_stats
-    SCIPY_OK = True
-except ImportError:
-    SCIPY_OK = False
-try:
-    import plotly.graph_objects as go
-    PLOTLY_OK = True
-except ImportError:
-    PLOTLY_OK = False
+from html import escape
 
+from src.league import format_value
+from src.ui.assets import BALL, BAT, STITCH, team_color
 
-# ── 강점 분석 ──────────────────────────────────────────────────────────────────
-def hitter_strengths(row):
-    out = []
-    war = row.get("war_3yr_sum", 0)
-    if war >= 12:  out.append(("·", f"리그 최상위 팀 기여도 — 3년 합산 WAR {war:.1f}"))
-    elif war >= 6: out.append(("·", f"꾸준한 팀 기여 — 3년 합산 WAR {war:.1f}"))
-    ops = row.get("ops_3yr_avg", 0)
-    if ops >= 0.900:   out.append(("·", f"강력한 타격 능력 — OPS {ops:.3f}"))
-    elif ops >= 0.800: out.append(("·", f"안정적인 타격 — OPS {ops:.3f}"))
-    hr = row.get("hr_3yr_avg", 0)
-    if hr >= 25: out.append(("·", f"장거리포 — 홈런 연평균 {hr:.0f}개"))
-    elif hr >= 15: out.append(("·", f"중장거리 타자 — 홈런 연평균 {hr:.0f}개"))
-    sb = row.get("sb_3yr_avg", 0)
-    if sb >= 20: out.append(("·", f"스피드 스타 — 도루 연평균 {sb:.0f}개"))
-    rbi = row.get("rbi_3yr_avg", 0)
-    if rbi >= 80: out.append(("·", f"클러치 히터 — 타점 연평균 {rbi:.0f}점"))
-    star = int(row.get("star_score", 0))
-    if star >= 6:   out.append(("·", "국가대표·MVP급 스타 플레이어"))
-    elif star >= 3: out.append(("·", "골든글러브·올스타 경력 보유"))
-    return out[:4] or [("·", "꾸준한 리그 활동 이력")]
+# 화면에 노출하는 지표 설명. 모델 용어는 쓰지 않는다.
+GLOSSARY_HITTER = [
+    ("팀 기여도", "WAR", "이 선수가 없었다면 팀이 잃었을 승리 수. 높을수록 팀에 중요한 선수."),
+    ("공격 종합", "OPS", "출루율 + 장타율. 타자의 전반적인 공격력을 나타내는 지표."),
+    ("출루율", "OBP", "타석에서 아웃 당하지 않은 비율. 높을수록 공격 기회를 많이 만드는 타자."),
+    ("장타율", "SLG", "타석당 평균 베이스 진루 수. 높을수록 장타력이 강한 타자."),
+    ("조정 득점 생산", "wRC+", "100이 리그 평균. 높을수록 평균보다 뛰어난 타자."),
+    ("가중 출루율", "wOBA", "단타·2루타·홈런에 다른 가중치를 준 종합 타격 지표."),
+]
 
+GLOSSARY_PITCHER = [
+    ("팀 기여도", "WAR", "이 선수가 없었다면 팀이 잃었을 승리 수. 높을수록 팀에 중요한 선수."),
+    ("방어율", "ERA", "9이닝당 자책점 평균. 낮을수록 좋은 투수."),
+    ("이닝당 출루 허용", "WHIP", "이닝당 출루 허용 수. 낮을수록 안정적인 투수."),
+    ("퀄리티스타트", "QS", "선발로 6이닝 이상을 3자책 이하로 막은 경기 수."),
+    ("9이닝당 탈삼진", "K/9", "9이닝 기준 탈삼진 수. 높을수록 스스로 아웃을 잡는 투수."),
+    ("9이닝당 볼넷", "BB/9", "9이닝 기준 볼넷 수. 낮을수록 안정적인 제구."),
+]
 
-def pitcher_strengths(row):
-    out = []
-    role = POS_KR.get(row.get("pitcher_role", "SP"), "투수")
-    war = row.get("war_3yr_sum", 0)
-    if war >= 8:   out.append(("·", f"리그 최상위 팀 기여 ({role}) — WAR {war:.1f}"))
-    elif war >= 4: out.append(("·", f"안정적인 팀 기여 ({role}) — WAR {war:.1f}"))
-    era = row.get("era_3yr_avg", 99)
-    if era <= 3.00:   out.append(("·", f"압도적 방어율 — ERA {era:.2f}"))
-    elif era <= 4.00: out.append(("·", f"안정적 방어율 — ERA {era:.2f}"))
-    innings = row.get("innings_3yr_avg", 0)
-    if innings >= 150: out.append(("·", f"강철 체력 선발 — 연평균 {innings:.0f}이닝"))
-    elif innings >= 60: out.append(("·", f"풀타임 활약 — 연평균 {innings:.0f}이닝"))
-    saves = row.get("save_3yr_avg", 0)
-    if saves >= 25:  out.append(("·", f"리그 최정상 마무리 — 연평균 {saves:.0f}세이브"))
-    elif saves >= 12: out.append(("·", f"검증된 마무리 — 연평균 {saves:.0f}세이브"))
-    holds = row.get("hold_3yr_avg", 0)
-    if holds >= 20: out.append(("·", f"핵심 셋업맨 — 연평균 {holds:.0f}홀드"))
-    star = int(row.get("star_score", 0))
-    if star >= 4: out.append(("·", "국가대표·최다승급 스타 투수"))
-    return out[:4] or [("·", "꾸준한 리그 활동 이력")]
+STAT_TIPS = {
+    "war": "이 선수가 없었다면 팀이 잃었을 승리 수. 높을수록 팀에 중요한 선수.",
+    "ops": "출루율 + 장타율. 타자의 전반적인 공격력을 나타내는 지표.",
+    "hr": "시즌당 홈런 수. 장타력을 가장 직관적으로 보여주는 지표.",
+    "rbi": "자신의 타격으로 홈에 불러들인 주자 수. 득점권 해결 능력을 보여줌.",
+    "era": "9이닝당 자책점 평균. 낮을수록 좋은 투수.",
+    "whip": "이닝당 출루 허용 수. 낮을수록 안정적인 투수.",
+    "innings": "한 시즌 소화한 이닝. 많을수록 팀이 길게 맡긴 투수.",
+    "save": "승리를 지키고 경기를 끝낸 횟수. 마무리 투수의 핵심 지표.",
+    "hold": "이어받은 리드를 지키고 다음 투수에게 넘긴 횟수. 셋업맨의 지표.",
+}
+
+MODE_CHIP = {
+    "past": ("hot", "{year} FA 완료"),
+    "future": ("soon", "{year} FA 예정"),
+    "active": ("", "{year} 기준 예상"),
+}
 
 
-# ── FA 상태 ────────────────────────────────────────────────────────────────────
-def get_current_salary(player_name, fa_df):
-    """fa_contracts에서 해당 선수의 가장 최근 FA 연평균 연봉 반환. 없으면 None."""
-    try:
-        rows = fa_df[fa_df["player_name"] == player_name]
-        if not rows.empty:
-            val = rows.sort_values("fa_year").iloc[-1]["annual_avg_salary"]
-            if pd.notna(val) and float(val) > 0:
-                salary = float(val)
-                if salary > 1000:  # 원 단위면 억으로 변환
-                    salary = salary / 1e8
-                return round(salary, 1)
-    except Exception:
-        pass
-    return None
+def _pct(value: float) -> str:
+    """0~1을 CSS 폭으로. 0%면 막대가 안 보여서 최소 폭을 준다."""
+    return f"{max(3.0, min(100.0, float(value) * 100)):.0f}%"
 
 
-def get_player_fa_status(player_name, fa_df, current_year=2026):
-    """가장 최근 FA 계약 기준으로 현재 계약 상태 반환."""
-    player_fa = fa_df[fa_df["player_name"] == player_name].sort_values("fa_year")
-    if player_fa.empty:
-        return {"status": "미래FA예정", "last_fa_year": None, "next_fa_year": None,
-                "contract_years": None, "contract_end_year": None}
-    latest = player_fa.iloc[-1]
-    last_fa_year = int(latest["fa_year"])
-    cy = latest.get("contract_years")
-    if pd.isna(cy) or int(cy) == 0:
-        tot = latest.get("total_contract_amount", 0)
-        ann = latest.get("annual_avg_salary", 1)
-        if pd.notna(tot) and pd.notna(ann) and float(ann) > 0:
-            cy = max(1, round(float(tot) / float(ann)))
-        else:
-            cy = 1
-    contract_years = int(cy)
-    contract_end_year = last_fa_year + contract_years - 1
-    status = "계약중" if current_year <= contract_end_year else "FA가능"
-    return {
-        "status": status,
-        "last_fa_year": last_fa_year,
-        "contract_years": contract_years,
-        "contract_end_year": contract_end_year,
-        "next_fa_year": last_fa_year + contract_years,
-    }
+def _tip(text: str | None) -> str:
+    if not text:
+        return ""
+    return f'<span class="tip" data-tip="{escape(text)}">?</span>'
 
 
-# ── 핵심 요소 ──────────────────────────────────────────────────────────────────
-def render_key_factors(row, xgb_model, meta_features, train_df, player_name="", key_prefix=""):
-    try:
-        importances = xgb_model.feature_importances_
-    except Exception:
-        return
-    fi = sorted(zip(meta_features, importances), key=lambda x: -x[1])
-    top5 = [(f, imp) for f, imp in fi if f in STAT_INFO or f in STAT_LABEL_MAP][:5]
-    if not top5:
-        return
+def stars(score: int) -> str:
+    """스타성 점수를 별로. MVP 5점·골든글러브 3점·국가대표 2점 합산 기준.
 
-    st.markdown('<p style="font-weight:700;font-size:0.95rem;margin:0 0 10px 0;">이 선수의 연봉을 결정한 핵심 요소</p>', unsafe_allow_html=True)
-
-    for rank, (feat, _) in enumerate(top5, 1):
-        if feat in STAT_INFO:
-            info = STAT_INFO[feat]
-            icon, label, unit, desc, good = info["icon"], info["label"], info["unit"], info["desc"], info["good"]
-        elif feat in STAT_LABEL_MAP:
-            label, desc = STAT_LABEL_MAP[feat]
-            icon, unit = "📊", ""
-            good = "low" if feat in LOWER_IS_BETTER else "high"
-        else:
-            continue
-
-        val = row.get(feat) if hasattr(row, "get") else None
-        if val is None or (isinstance(val, float) and np.isnan(val)):
-            continue
-
-        # 값 포맷
-        if feat in {"era_3yr_avg", "era_last_year", "whip_3yr_avg", "whip_last_year",
-                    "ops_3yr_avg", "ops_last_year", "woba_3yr_avg"}:
-            val_str = f"{val:.3f}"
-        elif feat == "age_at_fa":
-            val_str = f"{int(val)}"
-        elif feat in {"innings_3yr_avg", "games_3yr_avg"}:
-            val_str = f"{val:.0f}"
-        elif feat in {"war_3yr_sum", "war_3yr_avg", "war_last_year"}:
-            val_str = f"{val:.1f}"
-        elif feat in {"hr_3yr_avg", "rbi_3yr_avg", "save_3yr_avg", "hold_3yr_avg", "sb_3yr_avg"}:
-            val_str = f"{val:.1f}"
-        elif feat == "wrc_plus_3yr_avg":
-            val_str = f"{val:.0f}"
-        elif feat == "star_score":
-            val_str = f"{int(val)}"
-        else:
-            val_str = f"{val:.2f}"
-
-        val_with_unit = f"{val_str}{unit}" if unit else val_str
-
-        # 백분위 계산
-        try:
-            if feat in train_df.columns:
-                col_data = train_df[feat].dropna()
-                if SCIPY_OK:
-                    raw_pct = scipy_stats.percentileofscore(col_data, val, kind="rank")
-                    pct = int(100 - raw_pct) if good == "high" else int(raw_pct)
-                else:
-                    base = float((col_data < val).sum()) / max(len(col_data), 1)
-                    pct = int((1 - base) * 100) if good == "high" else int(base * 100)
-            else:
-                pct = 50
-        except Exception:
-            pct = 50
-
-        # expander 헤더
-        exp_label = f"{icon}  {label}   {val_with_unit}   리그 상위 {pct}%"
-
-        with st.expander(exp_label, expanded=False):
-            # ① 스탯 설명
-            st.markdown(f"**{label}란?** {desc}")
-
-            # ② 해석 문장
-            if good == "high":
-                if pct <= 10:
-                    verdict = f"리그 상위 {pct}% 수준으로 매우 뛰어납니다. 연봉을 크게 끌어올리는 요인입니다."
-                elif pct <= 30:
-                    verdict = f"리그 상위 {pct}% 수준으로 평균 이상입니다. 연봉에 긍정적으로 작용합니다."
-                elif pct <= 60:
-                    verdict = f"리그 평균 수준(상위 {pct}%)입니다. 연봉에 중립적으로 작용합니다."
-                else:
-                    verdict = f"리그 하위 {100-pct}% 수준으로, 연봉을 낮추는 방향으로 작용합니다."
-            else:
-                if pct >= 90:
-                    verdict = "리그 최하위 수준입니다. 이 수치는 연봉 평가에서 매우 불리하게 작용합니다."
-                elif pct >= 70:
-                    verdict = "리그 평균 이하 수준입니다. 연봉에 다소 부정적으로 작용합니다."
-                else:
-                    verdict = f"리그 상위 {pct}% 수준으로 우수합니다. 연봉을 높이는 방향으로 작용합니다."
-
-            st.markdown(f"**이 선수의 수치:** {val_with_unit} — {verdict}")
-
-            # ③ 리그 분포 히스토그램
-            if PLOTLY_OK and feat in train_df.columns:
-                try:
-                    col_data = train_df[feat].dropna()
-                    hist_fig = go.Figure()
-                    hist_fig.add_trace(go.Histogram(x=col_data, nbinsx=20,
-                                                    marker_color="#3a3a5c", name="리그 전체"))
-                    hist_fig.add_vline(x=val, line_color="#4f8ef7", line_width=2,
-                                       annotation_text=f"{player_name} ({val_with_unit})" if player_name else val_with_unit,
-                                       annotation_font_color="#4f8ef7")
-                    hist_fig.update_layout(
-                        paper_bgcolor="#0f0f1a", plot_bgcolor="#1e1e30",
-                        font=dict(color="#f0f0f0"), showlegend=False,
-                        margin=dict(l=10, r=10, t=30, b=10),
-                        xaxis=dict(gridcolor="#3a3a5c"),
-                        yaxis=dict(gridcolor="#3a3a5c", title="선수 수"),
-                        height=200,
-                    )
-                    st.plotly_chart(hist_fig, use_container_width=True,
-                                    key=f"hist_{key_prefix}_{feat}_{rank}")
-                    st.caption(f"리그 전체 FA 선수 중 이 선수의 {label} 위치")
-                except Exception:
-                    pass
+    골든글러브 한 번(3점)이면 별 하나, 열 번 받은 양의지(32점)면 다섯 개다.
+    """
+    for threshold, filled in ((20, 5), (12, 4), (6, 3), (3, 2), (1, 1)):
+        if score >= threshold:
+            return "★" * filled + "☆" * (5 - filled)
+    return "☆☆☆☆☆"
 
 
-# ── 상세 스탯 (탭 카드용, 검색 화면 내 요약) ────────────────────────────────────
-def render_detail_stats(player_name, is_hitter, h_stats_df, p_stats_df):
-    """연도별 상세 스탯 테이블 + 추세 라인 + 레이더 차트."""
-    try:
-        stat_df = h_stats_df if is_hitter else p_stats_df
-        rows = stat_df[stat_df["playerName"] == player_name].sort_values("collect_year")
-        if rows.empty:
-            st.caption("시즌 데이터를 찾을 수 없습니다.")
-            return
-
-        tab1, tab2 = st.tabs(["📋 연도별 상세 스탯", "📈 추세 그래프"])
-
-        with tab1:
-            if is_hitter:
-                display = rows[["collect_year", "teamName", "hitterGameCount",
-                                "hitterHra", "hitterObp", "hitterSlg", "hitterOps",
-                                "hitterWar", "hitterHr", "hitterRbi", "hitterSb"]].copy()
-                display.columns = ["연도", "팀", "경기", "타율", "출루율", "장타율",
-                                   "OPS", "WAR", "홈런", "타점", "도루"]
-                for col in ["타율", "출루율", "장타율", "OPS"]:
-                    display[col] = display[col].apply(lambda x: f"{x:.3f}" if pd.notna(x) else "-")
-                display["WAR"] = display["WAR"].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "⚠️ 비활성")
-            else:
-                display = rows[["collect_year", "teamName", "pitcherGameCount",
-                                "pitcherInning", "pitcherEra", "pitcherWhip",
-                                "pitcherWar", "pitcherWin", "pitcherLose",
-                                "pitcherSave", "pitcherHold"]].copy()
-                display.columns = ["연도", "팀", "경기", "이닝", "ERA", "WHIP",
-                                   "WAR", "승", "패", "세이브", "홀드"]
-                for col in ["ERA", "WHIP"]:
-                    display[col] = display[col].apply(lambda x: f"{x:.2f}" if pd.notna(x) else "-")
-                display["WAR"] = display["WAR"].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "⚠️ 비활성")
-            display["연도"] = display["연도"].astype(int)
-            st.dataframe(display, use_container_width=True, hide_index=True)
-
-        with tab2:
-            if not PLOTLY_OK:
-                st.caption("plotly가 설치되지 않아 차트를 표시할 수 없습니다.")
-                return
-            years = rows["collect_year"].tolist()
-            _DARK = dict(paper_bgcolor="#0f0f1a", plot_bgcolor="#1e1e30",
-                         font=dict(color="#f0f0f0"), legend=dict(bgcolor="#1e1e30"),
-                         margin=dict(l=20, r=60, t=40, b=20))
-
-            if is_hitter:
-                war_v = rows["hitterWar"].tolist()
-                ops_v = rows["hitterOps"].tolist()
-                hr_v  = rows["hitterHr"].tolist()
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=years, y=war_v, name="WAR",
-                                         line=dict(color="#4f8ef7", width=2), mode="lines+markers"))
-                fig.add_trace(go.Scatter(x=years, y=ops_v, name="OPS",
-                                         line=dict(color="#f4b400", width=2), mode="lines+markers",
-                                         yaxis="y2"))
-                fig.add_trace(go.Scatter(x=years, y=hr_v,  name="홈런",
-                                         line=dict(color="#ff6b6b", width=2), mode="lines+markers",
-                                         yaxis="y3"))
-                fig.update_layout(title="연도별 주요 스탯 추세",
-                                  xaxis=dict(tickvals=years, gridcolor="#3a3a5c"),
-                                  yaxis=dict(title="WAR", gridcolor="#3a3a5c"),
-                                  yaxis2=dict(overlaying="y", side="right", title="OPS", showgrid=False),
-                                  yaxis3=dict(overlaying="y", side="right", showgrid=False,
-                                              anchor="free", position=1.0, title="홈런"),
-                                  **_DARK)
-                # Radar
-                all_war = stat_df["hitterWar"].dropna(); all_ops = stat_df["hitterOps"].dropna()
-                all_hr  = stat_df["hitterHr"].dropna();  all_obp = stat_df["hitterObp"].dropna()
-                all_sb  = stat_df["hitterSb"].dropna()
-                last3   = rows.tail(3)
-                def _pct(series, val):
-                    s = series.dropna()
-                    return float((s < val).sum()) / len(s) if len(s) > 0 else 0.5
-                theta = ["WAR", "OPS", "홈런", "출루율", "도루"]
-                p_vals = [_pct(all_war, last3["hitterWar"].mean()),
-                          _pct(all_ops, last3["hitterOps"].mean()),
-                          _pct(all_hr,  last3["hitterHr"].mean()),
-                          _pct(all_obp, last3["hitterObp"].mean()),
-                          _pct(all_sb,  last3["hitterSb"].mean())]
-                l_vals = [0.5] * 5
-            else:
-                war_v = rows["pitcherWar"].tolist()
-                era_v = rows["pitcherEra"].tolist()
-                inn_v = rows["pitcherInning"].tolist()
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=years, y=war_v, name="WAR",
-                                         line=dict(color="#4f8ef7", width=2), mode="lines+markers"))
-                fig.add_trace(go.Scatter(x=years, y=era_v, name="ERA",
-                                         line=dict(color="#ff6b6b", width=2), mode="lines+markers",
-                                         yaxis="y2"))
-                fig.add_trace(go.Scatter(x=years, y=inn_v, name="이닝",
-                                         line=dict(color="#4caf50", width=2), mode="lines+markers",
-                                         yaxis="y3"))
-                fig.update_layout(title="연도별 주요 스탯 추세",
-                                  xaxis=dict(tickvals=years, gridcolor="#3a3a5c"),
-                                  yaxis=dict(title="WAR", gridcolor="#3a3a5c"),
-                                  yaxis2=dict(overlaying="y", side="right", title="ERA", showgrid=False),
-                                  yaxis3=dict(overlaying="y", side="right", showgrid=False,
-                                              anchor="free", position=1.0, title="이닝"),
-                                  **_DARK)
-                all_war  = stat_df["pitcherWar"].dropna()
-                all_era  = stat_df["pitcherEra"].dropna()
-                all_whip = stat_df["pitcherWhip"].dropna()
-                all_inn  = stat_df["pitcherInning"].dropna()
-                all_win  = stat_df["pitcherWin"].dropna()
-                last3    = rows.tail(3)
-                def _pct(series, val):
-                    s = series.dropna()
-                    return float((s < val).sum()) / len(s) if len(s) > 0 else 0.5
-                theta = ["WAR", "ERA(역)", "WHIP(역)", "이닝", "승리"]
-                p_vals = [_pct(all_war,  last3["pitcherWar"].mean()),
-                          1 - _pct(all_era,  last3["pitcherEra"].mean()),
-                          1 - _pct(all_whip, last3["pitcherWhip"].mean()),
-                          _pct(all_inn,  last3["pitcherInning"].mean()),
-                          _pct(all_win,  last3["pitcherWin"].mean())]
-                l_vals = [0.5] * 5
-
-            st.plotly_chart(fig, use_container_width=True)
-
-            radar = go.Figure()
-            radar.add_trace(go.Scatterpolar(
-                r=p_vals + [p_vals[0]], theta=theta + [theta[0]],
-                fill="toself", name=player_name,
-                line_color="#4f8ef7", fillcolor="rgba(79,142,247,0.2)"
-            ))
-            radar.add_trace(go.Scatterpolar(
-                r=l_vals + [l_vals[0]], theta=theta + [theta[0]],
-                fill="toself", name="리그 평균",
-                line_color="#aaaaaa", fillcolor="rgba(170,170,170,0.15)"
-            ))
-            radar.update_layout(
-                title="리그 평균 대비 현황",
-                polar=dict(bgcolor="#1e1e30",
-                           radialaxis=dict(color="#f0f0f0", gridcolor="#3a3a5c", range=[0, 1]),
-                           angularaxis=dict(color="#f0f0f0")),
-                legend=dict(bgcolor="#1e1e30"),
-                paper_bgcolor="#0f0f1a", font=dict(color="#f0f0f0"),
-                margin=dict(l=20, r=20, t=40, b=20)
-            )
-            st.plotly_chart(radar, use_container_width=True)
-    except Exception:
-        st.caption("상세 스탯을 불러오는 중 오류가 발생했습니다.")
+def career_line(card) -> str:
+    """MVP·골든글러브·국가대표를 사람이 읽는 문장으로."""
+    parts = []
+    if card.mvp_count:
+        parts.append(f"MVP {card.mvp_count}회")
+    if card.golden_glove_count:
+        parts.append(f"골든글러브 {card.golden_glove_count}회")
+    if card.national_team:
+        parts.append(f"국가대표 {card.national_team}회")
+    return " · ".join(parts) if parts else "주요 수상 없음"
 
 
-# ── 선수 사진 / 구단 로고 ──────────────────────────────────────────────────────
-@st.cache_data(ttl=3600)
-def get_player_photo(player_name: str):
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Referer": "https://sports.naver.com/",
-        "Accept": "application/json, text/plain, */*",
-        "Origin": "https://sports.naver.com",
-    }
-    IMAGE_KEYS = ["playerImageUrl", "profileImageUrl", "imageUrl", "profileImg",
-                  "playerImage", "image", "photo", "thumbnail"]
+# --------------------------------------------------------------------------
+# 공통 뼈대
+# --------------------------------------------------------------------------
 
-    # Try 1: 네이버 스포츠 KBO 선수 통계 API (시즌별, 타자+투수 모두)
-    for year in [2026, 2025, 2024]:
-        for ptype, sort in [("HITTER", "hitterWar"), ("PITCHER", "pitcherWar"),
-                             ("PITCHER", "pitcherSave"), ("PITCHER", "pitcherHold")]:
-            try:
-                url = (
-                    f"https://api-gw.sports.naver.com/statistics/categories/kbo"
-                    f"/seasons/{year}/players?playerType={ptype}"
-                    f"&field={sort}&direction=DESC&gameType=REGULAR_SEASON&page=1&pageSize=500"
-                )
-                resp = requests.get(url, headers=headers, timeout=8)
-                if resp.status_code != 200:
-                    continue
-                data = resp.json()
-                players = (data.get("result", {}).get("seasonPlayerStats")
-                           or data.get("result", {}).get("players")
-                           or data.get("data", {}).get("players")
-                           or data.get("players") or [])
-                for p in players:
-                    pname = p.get("playerName") or p.get("name") or p.get("playerNm") or ""
-                    if pname == player_name:
-                        for k in IMAGE_KEYS:
-                            if p.get(k):
-                                return p[k]
-            except Exception:
-                pass
-
-    # Try 2: 네이버 스포츠 선수 상세 검색
-    try:
-        url = (f"https://api-gw.sports.naver.com/search/people"
-               f"?keyword={requests.utils.quote(player_name)}&sport=kbo&from=0&size=5")
-        resp = requests.get(url, headers=headers, timeout=5)
-        if resp.status_code == 200:
-            data = resp.json()
-            for top_key in ["result", "data", ""]:
-                block = data.get(top_key, data) if top_key else data
-                for sub_key in ["players", "items", "people", "list"]:
-                    items = block.get(sub_key, []) if isinstance(block, dict) else []
-                    if items:
-                        for img_key in IMAGE_KEYS:
-                            if items[0].get(img_key):
-                                return items[0][img_key]
-    except Exception:
-        pass
-
-    # Try 3: 네이버 스포츠 KBO 팀 로스터에서 검색
-    try:
-        url = (f"https://api-gw.sports.naver.com/schedule/teams/kbo"
-               f"/roster?query={requests.utils.quote(player_name)}")
-        resp = requests.get(url, headers=headers, timeout=5)
-        if resp.status_code == 200:
-            data = resp.json()
-            for img_key in IMAGE_KEYS:
-                val = data.get("result", {}).get(img_key) or data.get(img_key)
-                if val:
-                    return val
-    except Exception:
-        pass
-
-    return None
-
-
-def show_player_photo(player_name: str, size: int = 100):
-    """선수 사진을 HTML img 태그로 표시 (st.image 사용 안 함 - 빈 박스 방지)."""
-    url = get_player_photo(player_name)
-    if url:
-        st.markdown(
-            f'<div style="text-align:center;margin-bottom:10px;">'
-            f'<img src="{url}" width="{size}" height="{size}" referrerpolicy="no-referrer" '
-            f'style="border-radius:50%;object-fit:cover;border:2px solid #3a3a5c;"/>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-        return
-    initials = player_name[:1] if player_name else "?"
-    st.markdown(
-        f'<div style="text-align:center;margin-bottom:10px;">'
-        f'<div style="width:{size}px;height:{size}px;border-radius:50%;'
-        f'background:linear-gradient(135deg,#1e3a5f,#4f8ef7);'
-        f'display:inline-flex;align-items:center;justify-content:center;'
-        f'font-size:{size//3}px;font-weight:bold;color:white;">'
-        f'{initials}</div></div>',
-        unsafe_allow_html=True,
+def appbar(show_back: bool = False) -> str:
+    back = '<a class="backlink" href="?" target="_self">← 처음으로</a>' if show_back else ""
+    return (
+        f'<div class="appbar">'
+        f'<a class="brand" href="?" target="_self">{BALL}<b>StoveLens <i>AI</i></b></a>'
+        f"{back}</div>"
     )
 
 
-def show_team_logo(team_name: str, size: int = 40):
-    url = TEAM_LOGO.get(team_name)
-    if url:
-        try:
-            st.image(url, width=size)
-            return
-        except Exception:
-            pass
-    st.markdown(f"**{team_name}**")
+def section(title: str, note: str | None = None) -> str:
+    tail = f'<span class="note">{escape(note)}</span>' if note else ""
+    return (
+        f'<div class="sect"><span class="plate"></span>'
+        f"<h2>{escape(title)}</h2>{tail}{STITCH}</div>"
+    )
 
 
-# ── 상세 성적 페이지 헬퍼 ────────────────────────────────────────────────────────
-def _parse_inning(val) -> float:
-    """'184 1/3' 같은 이닝 문자열을 float으로 변환."""
-    if pd.isna(val):
-        return 0.0
-    s = str(val).strip()
-    if " " in s:
-        parts = s.split(" ", 1)
-        try:
-            whole = float(parts[0])
-            if "/" in parts[1]:
-                n, d = parts[1].split("/")
-                return whole + float(n) / float(d)
-        except Exception:
-            pass
-    try:
-        return float(s)
-    except Exception:
-        return 0.0
+def notice(text: str) -> str:
+    return f'<div class="notice">{text}</div>'
 
 
-def _to_num(series: pd.Series) -> pd.Series:
-    """시리즈를 안전하게 float 변환 (문자열 포함 처리)."""
-    return pd.to_numeric(series, errors="coerce").fillna(0.0)
+def splash() -> str:
+    return (
+        f'<div class="splash">{BALL}'
+        f'<div class="nm">StoveLens <i>AI</i></div>'
+        f'<div class="msg">KBO FA 연봉 예측 모델을 불러오는 중</div></div>'
+    )
 
 
-def _calc_pct(series: pd.Series, val: float, inv: bool = False) -> float:
-    """val이 series 분포에서 몇 %ile인지 반환 (0~100). inv=True → 낮을수록 좋은 지표."""
-    s = pd.to_numeric(series, errors="coerce").dropna()
-    if len(s) == 0:
-        return 50.0
-    raw = float((s < val).sum()) / len(s)
-    return round((1.0 - raw if inv else raw) * 100.0, 1)
+# --------------------------------------------------------------------------
+# 홈
+# --------------------------------------------------------------------------
+
+def hero(field_svg: str, flying_ball: str) -> str:
+    return (
+        f'<div class="hero">{field_svg}{flying_ball}'
+        f'<div class="kicker"><span class="lamp"></span>KBO FREE AGENT VALUATION</div>'
+        f"<h1><span><i>다음 FA는</i></span>"
+        f"<span><i>얼마짜리인가<em>.</em></i></span></h1></div>"
+    )
 
 
-def _league_avg_pct(series: pd.Series, inv: bool = False) -> float:
-    """리그 평균값이 분포에서 몇 %ile인지 반환 (리그 평균 기준선 계산용)."""
-    s = pd.to_numeric(series, errors="coerce").dropna()
-    if len(s) == 0:
-        return 50.0
-    avg = s.mean()
-    raw = float((s < avg).sum()) / len(s)
-    return round((1.0 - raw if inv else raw) * 100.0, 1)
+def ticker(rows: list[dict]) -> str:
+    if not rows:
+        return ""
+
+    def one(row: dict) -> str:
+        inner = (
+            f'<span class="yy">{row["year"]}</span>'
+            f'<span class="nn">{escape(row["name"])}</span>'
+            f'<span class="tt">{escape(row["team"])} · {escape(row["position"])}</span>'
+            f'<span class="plate"></span>'
+        )
+        if row.get("player_id"):
+            return f'<a class="it" href="?p={row["player_id"]}" target="_self">{inner}</a>'
+        return f'<span class="it">{inner}</span>'
+
+    items = "".join(one(row) for row in rows)
+    return (
+        '<div class="ticker">'
+        '<div class="lbl"><span class="lamp" style="background:#fff;box-shadow:0 0 8px #fff"></span>NEXT FA</div>'
+        f'<div class="win"><div class="rail">'
+        f'<div class="grp">{items}</div>'
+        f'<div class="grp" aria-hidden="true">{items}</div>'
+        f"</div></div></div>"
+    )
 
 
-def _html_table(df: pd.DataFrame) -> str:
-    """다크 테마 HTML 테이블 생성 (st.dataframe 대신 사용)."""
-    th_style = ("background:#1a1a2e;color:#aaccff;font-weight:700;"
-                "padding:8px 12px;text-align:center;border-bottom:2px solid #3a3a5c;"
-                "font-size:0.82rem;white-space:nowrap;")
-    td_style = ("color:#f0f0f0;padding:7px 12px;text-align:center;"
-                "border-bottom:1px solid #2a2a4a;font-size:0.85rem;")
-    tr_even  = "background:#1a1a2e;"
-    tr_odd   = "background:#0f0f1a;"
+def bento(candidates: list[dict], median: float, median_label: str = "타자") -> str:
+    """상위 후보 타일. 첫 칸은 크게, 나머지는 작게."""
+    if not candidates:
+        return ""
 
-    head = "".join(f"<th style='{th_style}'>{c}</th>" for c in df.columns)
-    rows_html = ""
-    for i, (_, row) in enumerate(df.iterrows()):
-        bg = tr_even if i % 2 == 0 else tr_odd
-        cells = "".join(f"<td style='{td_style}'>{v}</td>" for v in row)
-        rows_html += f"<tr style='{bg}'>{cells}</tr>"
+    head, rest = candidates[0], candidates[1:5]
+    relation = "높음" if head["predicted"] >= median else "낮음"
+    age = f" · {head['age']}세" if head.get("age") else ""
+
+    tiles = (
+        f'<a class="tile big" style="--tc:{team_color(head["team"])}" '
+        f'href="?p={head["player_id"]}" target="_self">{BAT}'
+        f'<div class="yy">{head["fa_year"]} FA 예정</div>'
+        f'<div class="nn">{escape(head["name"])}</div>'
+        f'<div class="tt">{escape(head["team"])} · {escape(head["position"])}{age}</div>'
+        f'<div class="pred"><div class="k">AI 예상 연봉</div>'
+        f'<div class="v">{head["predicted"]:.1f}<small>억 / 년</small></div>'
+        f'<div class="ref">역대 {escape(median_label)} FA 연평균 중앙값 '
+        f"<b>{median:.1f}억</b>보다 {relation}</div></div></a>"
+    )
+
+    for item in rest:
+        tiles += (
+            f'<a class="tile md" style="--tc:{team_color(item["team"])}" '
+            f'href="?p={item["player_id"]}" target="_self">'
+            f'<div class="yy">{item["fa_year"]}</div>'
+            f'<div class="nn">{escape(item["name"])}</div>'
+            f'<div class="tt">{escape(item["team"])} · {escape(item["position"])}</div>'
+            f'<span class="go">분석 보기 →</span></a>'
+        )
+
+    return f'<div class="bento">{tiles}</div>'
+
+
+def board(cells: list[tuple[str, int]]) -> str:
+    body = "".join(
+        f'<div class="cell"><div class="cl">{escape(label)}</div>'
+        f'<div class="cv">{value:,}</div></div>'
+        for label, value in cells
+    )
+    return f'<div class="board">{body}</div>'
+
+
+def search_results(rows: list[dict]) -> str:
+    if not rows:
+        return '<div class="empty">검색 결과가 없습니다. 이름 일부나 초성으로 다시 찾아보세요.</div>'
+
+    lines = "".join(
+        f'<a class="rline" style="--tc:{team_color(row["team"])}" '
+        f'href="?p={row["player_id"]}" target="_self">'
+        f'<span class="nm">{escape(row["name"])}</span>'
+        f'<span class="meta">{escape(row["meta"])}</span>'
+        f'<span class="go">분석 보기 →</span></a>'
+        for row in rows
+    )
+    return f'<div class="results">{lines}</div>'
+
+
+# --------------------------------------------------------------------------
+# 선수 화면
+# --------------------------------------------------------------------------
+
+def player_hero(card) -> str:
+    chip_class, chip_text = MODE_CHIP[card.mode]
+
+    if card.photo_url:
+        photo = f'<img src="{escape(str(card.photo_url))}" alt="{escape(card.name)}"/>'
+    else:
+        photo = escape(card.name[:1])
+
+    age_text = f"FA 시점 {card.age}세" if card.age else "나이 정보 없음"
+    detail = f"{age_text} &nbsp;·&nbsp; {escape(career_line(card))}"
 
     return (
-        f"<div style='overflow-x:auto;border-radius:10px;border:1px solid #2a2a4a;'>"
-        f"<table style='width:100%;border-collapse:collapse;'>"
-        f"<thead><tr>{head}</tr></thead><tbody>{rows_html}</tbody></table></div>"
+        f'<div class="phero" style="--tc:{team_color(card.team)}">'
+        f'<span class="wm">{card.fa_year}</span>'
+        f'<div class="slab"><div class="ph">{photo}</div></div>'
+        f'<div class="body"><div class="chips">'
+        f'<span class="chip team">{escape(card.team)}</span>'
+        f'<span class="chip">{escape(card.position_label)}</span>'
+        f'<span class="chip {chip_class}">{escape(chip_text.format(year=card.fa_year))}</span>'
+        f"</div><h2>{escape(card.name)}</h2>"
+        f'<div class="sub"><span class="stars">{stars(card.star_score)}</span>'
+        f"&nbsp;&nbsp; {detail}</div></div></div>"
     )
+
+
+def money_panel(card, subtitle: str, reference_html: str, scale_max: float) -> str:
+    """예상 연봉 + 예상 범위 막대. 막대의 오른쪽 끝은 역대 FA 최고 연평균이다."""
+    span = max(scale_max, card.high) or 1.0
+    left = card.low / span * 100
+    right = 100 - (card.high / span * 100)
+    dot = card.predicted / span * 100
+
+    return (
+        f'<div class="pane"><div class="pane-t"><b>AI 예상 연봉</b>'
+        f"<s>{escape(subtitle)}</s></div>"
+        f'<div class="money"><span class="n">{card.predicted:.1f}</span>'
+        f'<span class="u">억 / 년</span></div>'
+        f'<div class="money-ref">{reference_html}</div>'
+        f'<div class="gauge"><div class="lbl">예상 범위</div><div class="track">'
+        f'<div class="band" style="left:{left:.1f}%;right:{max(0.0, right):.1f}%"></div>'
+        f'<div class="dot" style="left:{dot:.1f}%"></div></div>'
+        f'<div class="ends"><span>{card.low:.1f}억</span>'
+        f'<span>{card.high:.1f}억</span></div></div></div>'
+    )
+
+
+def versus_panel(card, result: dict, reference_html: str) -> str:
+    return (
+        f'<div class="pane"><div class="pane-t"><b>예측 vs 실제</b><s>연평균 · 억 원</s></div>'
+        f'<div class="versus">'
+        f'<div class="vs-box ai"><div class="k">AI 예측</div>'
+        f'<div class="v">{card.predicted:.1f}</div></div>'
+        f'<div class="vs-mid"></div>'
+        f'<div class="vs-box real"><div class="k">실제 계약</div>'
+        f'<div class="v">{card.actual:.1f}</div></div></div>'
+        f'<div class="verdict {result["tone"]}">'
+        f'<div class="big">{escape(result["title"])}</div>'
+        f'<div class="txt">{escape(result["text"])}<br/>{reference_html}</div>'
+        f"</div></div>"
+    )
+
+
+def stat_board(stats: list[dict], title: str, basis: str) -> str:
+    """전광판 스탯 4칸. stats 각 항목은 label/text/band/fmt를 갖는다."""
+    cells = ""
+    for index, stat in enumerate(stats):
+        band = stat.get("band")
+        if band:
+            comparison = (
+                f'<div class="scale">'
+                f'<i style="width:{_pct(band["bar"])};animation-delay:{index * 0.1:.1f}s"></i>'
+                f'<span class="avg" style="left:{_pct(band["avg_at"])}"></span></div>'
+                f'<div class="cmp">'
+                f'<span>리그 평균 {format_value(band["avg"], stat.get("fmt"))}</span>'
+                f'<span class="rank">{band["rank_text"]}</span></div>'
+            )
+        else:
+            comparison = '<div class="cmp"><span>비교 기준 없음</span></div>'
+
+        cells += (
+            f'<div class="sb"><div class="k">{escape(stat["label"])}'
+            f'{_tip(STAT_TIPS.get(stat.get("key")))}</div>'
+            f'<div class="v">{stat["text"]}</div>{comparison}</div>'
+        )
+
+    return (
+        f'<div class="pane"><div class="pane-t"><b>{escape(title)}</b>'
+        f"<s>3시즌을 시즌당 평균 낸 값</s></div>"
+        f'<div class="sboard">{cells}</div>'
+        f'<div class="basis">{basis}</div></div>'
+    )
+
+
+def factor_list(factors: list[dict]) -> str:
+    if not factors:
+        return notice(
+            "이 선수의 예측 근거를 계산하지 못했습니다. "
+            "위의 예상 연봉은 정상적으로 나온 값입니다."
+        )
+
+    body = ""
+    for index, factor in enumerate(factors):
+        direction = "" if factor["up"] else " down"
+        unit = f'<small>{escape(factor["unit"])}</small>' if factor.get("unit") else ""
+        body += (
+            f'<div class="f{direction}"><div class="fhead"><span class="base"></span>'
+            f'<span class="fnm">{escape(factor["label"])}{_tip(factor.get("tip"))}</span>'
+            f'<span class="fval">{factor["value_text"]}{unit}</span></div>'
+            f'<div class="scale">'
+            f'<i style="width:{_pct(factor["bar"])};animation-delay:{index * 0.1:.1f}s"></i>'
+            f'<span class="avg" style="left:{_pct(factor["avg_at"])}"></span></div>'
+            f'<div class="fsub"><span>{escape(factor["note"])}</span>'
+            f'<span>{factor["right"]}</span></div></div>'
+        )
+    return f'<div class="pane"><div class="factors">{body}</div></div>'
+
+
+def offer_list(offers, need_label) -> str:
+    """구단별 제시가. offers는 team_abbr/team_name/low/high/offer/need_score 컬럼을 갖는다."""
+    top = float(offers["offer"].max()) or 1.0
+    rows = ""
+    for index, offer in enumerate(offers.itertuples()):
+        rows += (
+            f'<div class="of" style="--tc:{team_color(offer.team_name)}">'
+            f'<span class="tm">{escape(str(offer.team_abbr))}</span>'
+            f'<span class="track"><i style="width:{offer.offer / top * 100:.0f}%;'
+            f'animation-delay:{index * 0.06:.2f}s"></i></span>'
+            f'<span class="need">{escape(need_label(offer.need_score))}</span>'
+            f'<span class="amt">{offer.low:.1f} ~ {offer.high:.1f}억</span></div>'
+        )
+    return f'<div class="offers">{rows}</div>'
+
+
+def season_table(table, seasons_used: str) -> str:
+    """최근 3시즌 원본 기록 표.
+
+    st.dataframe을 쓰면 이 화면에서 혼자 밝은 회색으로 떠서 HTML로 직접 그린다.
+    """
+    head = "".join(f"<th>{escape(str(column))}</th>" for column in table.columns)
+    body = ""
+    for row in table.itertuples(index=False):
+        cells = ""
+        for value in row:
+            text = f"{value:.3f}".lstrip("0") if isinstance(value, float) and value < 1 \
+                else f"{value:g}" if isinstance(value, float) else str(value)
+            cells += f"<td>{escape(text)}</td>"
+        body += f"<tr>{cells}</tr>"
+
+    return (
+        f'<div class="pane stable"><div class="pane-t"><b>최근 3시즌 기록</b>'
+        f"<s>{escape(seasons_used)} 시즌</s></div>"
+        f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>"
+    )
+
+
+def glossary(is_hitter: bool) -> str:
+    entries = GLOSSARY_HITTER if is_hitter else GLOSSARY_PITCHER
+    body = "".join(
+        f'<div class="gl"><dt>{escape(name)} <em>{escape(code)}</em></dt>'
+        f"<dd>{escape(desc)}</dd></div>"
+        for name, code, desc in entries
+    )
+    return f'<dl class="glossary">{body}</dl>'
