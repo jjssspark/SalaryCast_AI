@@ -9,7 +9,7 @@
   active — 둘 다 아닌 현역. FA가 온다면 얼마일지를 참고값으로 낸다.
 표본이 모자라면 숫자를 내지 않고 왜 못 내는지 적는다.
 
-R²·RMSE·모델 이름 같은 말은 '분석 상세' 안에서만 쓴다.
+R²·RMSE·모델 이름 같은 말은 화면에 쓰지 않는다.
 """
 
 from __future__ import annotations
@@ -24,7 +24,6 @@ from src.serving import (
     build_card,
     bundle_of,
     league_of,
-    model_metrics,
     overall_median,
     position_median,
     salary_scale,
@@ -85,8 +84,6 @@ def render(context: Context, player_id: int) -> None:
     _html(ui.section("지표 설명"))
     _html(ui.glossary(card.is_hitter))
 
-    _render_details(context, card)
-
 
 def _render_blocked(context: Context, player_id: int, reason: str) -> None:
     found = context.master[context.master["player_id"] == player_id]
@@ -138,37 +135,3 @@ def _right_pane(context: Context, card) -> str:
     return ui.stat_board(stats, MODE_TITLE[card.mode], basis_text(league, card.is_hitter))
 
 
-def _render_details(context: Context, card) -> None:
-    """발표·보고서용. 여기 안에서만 모델 용어를 쓴다."""
-    with st.expander("분석 상세 (발표용)"):
-        st.markdown(
-            f"**입력 시즌** {card.seasons_used}  \n"
-            f"**FA 기준 연도** {card.fa_year}  \n"
-            f"**분기** `{card.mode}`  \n"
-            f"**나이** {card.age if card.age else '미상 — 나이 관련 피처를 결측으로 넣음'}  \n"
-            f"**스타성** {card.star_score}점 "
-            f"(MVP {card.mvp_count} · 골든글러브 {card.golden_glove_count} · "
-            f"국가대표 {card.national_team})"
-        )
-
-        st.markdown(
-            "| 대상 | 구성 | R² | RMSE | MAE | 표본 |\n|---|---|---|---|---|---|\n"
-            + "\n".join(
-                f"| {row['label']} | {row['method']} | {row['r2']:.3f} | "
-                f"{row['rmse']:.2f}억 | {row['mae']:.2f}억 | {row['n']}명 |"
-                for row in model_metrics(context)
-            )
-        )
-        st.caption(
-            "5-fold 교차검증을 5회 반복한 OOF 예측을 억 원 단위로 되돌려 계산한 값. "
-            "타깃은 log1p(연평균 계약금). "
-            "예상 범위는 해당 모델의 MAE만큼 위아래로 잡은 구간. "
-            "요인 순서는 LightGBM 쪽 SHAP 기여도를 뜻이 같은 피처끼리 합산해 매김."
-        )
-
-        st.caption(
-            "스타성은 연도별 수상자 명단에서 만든 값 "
-            "(골든글러브 1982~2025 전량, MVP 39개 연도, 국제대회 10개). "
-            "아시안게임 3개 대회는 한국어 위키백과에 야구 명단 문서가 없어 빠져 있음. "
-            "올스타는 2014년 이전 자료가 없어 항목 자체를 뺐음."
-        )

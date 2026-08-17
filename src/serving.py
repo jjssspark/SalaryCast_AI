@@ -412,24 +412,6 @@ def counters(context: Context) -> list[tuple[str, int]]:
     ]
 
 
-def model_metrics(context: Context) -> list[dict]:
-    """분석 상세 토글용 성능 수치. 일반 화면 본문에는 쓰지 않는다."""
-    return [
-        {
-            "label": label,
-            "method": bundle["meta"]["method"],
-            "r2": float(bundle["meta"]["r2"]),
-            "rmse": float(bundle["meta"]["rmse_억"]),
-            "mae": float(bundle["meta"]["mae_억"]),
-            "n": int(bundle["meta"]["n_samples"]),
-        }
-        for label, bundle in [
-            ("타자", context.hitter_bundle),
-            ("투수", context.pitcher_bundle),
-        ]
-    ]
-
-
 def safe_float(value, default: float = 0.0) -> float:
     try:
         result = float(value)
