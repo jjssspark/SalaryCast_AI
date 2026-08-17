@@ -1,0 +1,714 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>StoveLens AI — 디자인 목업 v1</title>
+<style>
+/* ─────────────────────────────────────────────────────────────
+   디자인 토큰 — 심야 구장 / 전광판 / 중계 그래픽
+   ───────────────────────────────────────────────────────────── */
+:root{
+  --ink:#04070E;
+  --field:#080D16;
+  --panel:#0E1520;
+  --panel-2:#141D2B;
+  --line:rgba(255,255,255,.09);
+  --line-strong:rgba(255,255,255,.18);
+  --chalk:#EAF0F8;
+  --dim:#7A8AA0;
+  --dimmer:#4E5C70;
+
+  --red:#FF3B30;
+  --amber:#FFC531;
+  --grass:#1FD67A;
+  --sky:#4CC9F0;
+
+  --sans:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Malgun Gothic",sans-serif;
+  --num:"Helvetica Neue",Helvetica,Arial,sans-serif;
+
+  --dur-1:.18s; --dur-2:.4s; --dur-3:.9s;
+  --ease:cubic-bezier(.16,1,.3,1);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--ink);
+  color:var(--chalk);
+  font-family:var(--sans);
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+
+/* 구장 바닥 — 잔디 스트라이프 + 야간 조명 */
+body::before{
+  content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(900px 420px at 18% -8%, rgba(255,59,48,.16), transparent 60%),
+    radial-gradient(760px 480px at 88% 4%, rgba(76,201,240,.12), transparent 62%),
+    radial-gradient(1200px 700px at 50% 118%, rgba(31,214,122,.13), transparent 60%),
+    var(--field);
+}
+body::after{
+  content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;
+  background:repeating-linear-gradient(115deg,
+    rgba(255,255,255,.016) 0 34px, rgba(0,0,0,0) 34px 68px);
+}
+.wrap{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:0 22px 100px}
+
+/* ── 화면 전환기 (목업 전용) ─────────────────────────────── */
+.switch{
+  position:sticky;top:0;z-index:60;
+  display:flex;gap:6px;align-items:center;
+  padding:10px 22px;margin:0 -22px 0;
+  background:rgba(4,7,14,.86);backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line);
+}
+.switch .tag{
+  font-size:.66rem;letter-spacing:.16em;color:var(--dimmer);
+  margin-right:10px;font-weight:700;
+}
+.switch button{
+  font-family:var(--sans);font-size:.78rem;font-weight:700;
+  color:var(--dim);background:transparent;border:1px solid var(--line);
+  padding:7px 14px;border-radius:999px;cursor:pointer;
+  transition:color var(--dur-1),border-color var(--dur-1),background var(--dur-1);
+}
+.switch button:hover{color:var(--chalk);border-color:var(--line-strong)}
+.switch button[aria-pressed="true"]{
+  color:#0A0A0A;background:var(--amber);border-color:var(--amber);
+}
+.screen{display:none}
+.screen.on{display:block;animation:screenIn var(--dur-3) var(--ease) both}
+@keyframes screenIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+/* ── 앱 헤더 ──────────────────────────────────────────────── */
+.appbar{
+  display:flex;align-items:center;gap:20px;
+  padding:20px 0 18px;
+}
+.brand{display:flex;align-items:center;gap:11px;flex-shrink:0}
+.brand .ball{
+  width:30px;height:30px;border-radius:50%;flex-shrink:0;
+  background:radial-gradient(circle at 32% 28%,#fff 0 42%,#E4E8EE 43% 100%);
+  position:relative;animation:spin 7s linear infinite;
+}
+.brand .ball::before,.brand .ball::after{
+  content:"";position:absolute;inset:3px;border-radius:50%;
+  border:1.6px solid var(--red);
+  clip-path:inset(0 62% 0 0);
+}
+.brand .ball::after{transform:rotate(180deg)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.brand b{font-size:1.06rem;font-weight:900;letter-spacing:-.02em}
+.brand b i{color:var(--red);font-style:normal}
+
+/* 검색 — 전광판 입력 */
+.searchbox{position:relative;flex:1;max-width:520px}
+.searchbox input{
+  width:100%;font-family:var(--sans);font-size:.95rem;font-weight:600;
+  color:var(--chalk);background:var(--panel);
+  border:1px solid var(--line);border-left:3px solid var(--red);
+  border-radius:4px;padding:13px 15px 13px 42px;outline:none;
+  transition:border-color var(--dur-1),box-shadow var(--dur-1),background var(--dur-1);
+}
+.searchbox input::placeholder{color:var(--dimmer);font-weight:500}
+.searchbox input:focus{
+  background:var(--panel-2);border-color:var(--line-strong);
+  border-left-color:var(--amber);
+  box-shadow:0 0 0 3px rgba(255,197,49,.14);
+}
+.searchbox .ico{
+  position:absolute;left:15px;top:50%;transform:translateY(-50%);
+  color:var(--dimmer);font-size:.95rem;pointer-events:none;
+}
+.hint{font-size:.7rem;color:var(--dimmer);margin-top:7px;letter-spacing:.01em}
+.hint b{color:var(--amber);font-weight:700}
+
+/* 자동완성 */
+.ac{
+  position:absolute;top:calc(100% + 7px);left:0;right:0;z-index:40;
+  background:var(--panel-2);border:1px solid var(--line-strong);border-radius:6px;
+  overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.6);
+}
+.ac-row{
+  display:flex;align-items:center;gap:11px;padding:11px 14px;
+  border-bottom:1px solid var(--line);cursor:pointer;
+  transition:background var(--dur-1);
+}
+.ac-row:last-child{border-bottom:none}
+.ac-row:hover,.ac-row.sel{background:rgba(255,197,49,.09)}
+.ac-row .nm{font-weight:800;font-size:.92rem}
+.ac-row .nm em{font-style:normal;color:var(--amber)}
+.ac-row .mt{font-size:.74rem;color:var(--dim);margin-left:auto;text-align:right}
+.ac-badge{
+  font-size:.6rem;font-weight:800;letter-spacing:.06em;
+  padding:3px 7px;border-radius:3px;
+}
+.b-fa{background:rgba(255,59,48,.16);color:#FF7A72}
+.b-soon{background:rgba(255,197,49,.16);color:var(--amber)}
+.b-what{background:rgba(122,138,160,.16);color:var(--dim)}
+
+/* ── 홈 히어로 ────────────────────────────────────────────── */
+.hero{
+  position:relative;overflow:hidden;border-radius:10px;
+  padding:64px 40px 54px;margin-top:8px;
+  border:1px solid var(--line);
+  background:
+    linear-gradient(135deg,rgba(255,59,48,.14),transparent 46%),
+    linear-gradient(300deg,rgba(76,201,240,.11),transparent 50%),
+    var(--panel);
+}
+/* 파울라인 대각선 */
+.hero::before{
+  content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;
+  background:repeating-linear-gradient(58deg,
+    rgba(255,255,255,.035) 0 1px, transparent 1px 46px);
+}
+.kicker{
+  font-size:.68rem;font-weight:800;letter-spacing:.22em;color:var(--red);
+  margin-bottom:16px;
+}
+.hero h1{
+  font-size:clamp(2.6rem,7vw,4.6rem);font-weight:900;line-height:.94;
+  letter-spacing:-.045em;margin-bottom:16px;
+}
+.hero h1 i{font-style:normal;color:var(--red)}
+.hero p{color:var(--dim);font-size:1.01rem;max-width:540px;line-height:1.65}
+
+/* 전광판 스트립 */
+.board{
+  display:flex;margin-top:34px;border:1px solid var(--line-strong);
+  border-radius:5px;overflow:hidden;background:rgba(0,0,0,.35);
+}
+.board .cell{
+  flex:1;padding:15px 16px;border-right:1px solid var(--line);
+}
+.board .cell:last-child{border-right:none}
+.board .cl{font-size:.6rem;letter-spacing:.16em;color:var(--dimmer);font-weight:800}
+.board .cv{
+  font-family:var(--num);font-size:1.7rem;font-weight:800;
+  letter-spacing:-.03em;color:var(--amber);margin-top:5px;
+  font-variant-numeric:tabular-nums;
+  text-shadow:0 0 22px rgba(255,197,49,.4);
+}
+
+/* ── 섹션 헤더 ────────────────────────────────────────────── */
+.sect{display:flex;align-items:baseline;gap:13px;margin:52px 0 18px}
+.sect h2{font-size:1.16rem;font-weight:900;letter-spacing:-.02em}
+.sect span{font-size:.73rem;color:var(--dimmer)}
+.sect::after{content:"";flex:1;height:1px;background:var(--line)}
+
+/* ── 라인업 카드 그리드 ───────────────────────────────────── */
+.lineup{display:grid;grid-template-columns:repeat(auto-fill,minmax(258px,1fr));gap:11px}
+.lc{
+  position:relative;overflow:hidden;
+  display:flex;align-items:center;gap:13px;
+  padding:14px 16px;border-radius:6px;
+  background:var(--panel);border:1px solid var(--line);
+  border-left:3px solid var(--tc,var(--dimmer));
+  cursor:pointer;
+  transition:transform var(--dur-2) var(--ease),border-color var(--dur-1),background var(--dur-1);
+}
+.lc:hover{transform:translateY(-3px);background:var(--panel-2);border-color:var(--line-strong)}
+/* 호버 스캔라인 */
+.lc::after{
+  content:"";position:absolute;top:0;bottom:0;width:38%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.07),transparent);
+  transform:translateX(-160%);
+}
+.lc:hover::after{animation:scan .75s var(--ease)}
+@keyframes scan{to{transform:translateX(360%)}}
+.lc .no{
+  font-family:var(--num);font-size:1.5rem;font-weight:800;
+  color:var(--dimmer);width:30px;flex-shrink:0;font-variant-numeric:tabular-nums;
+}
+.lc .nm{font-weight:800;font-size:.98rem;letter-spacing:-.01em}
+.lc .mt{font-size:.72rem;color:var(--dim);margin-top:3px}
+.lc .yr{
+  margin-left:auto;font-family:var(--num);font-weight:800;font-size:.86rem;
+  color:var(--amber);flex-shrink:0;
+}
+
+/* ── 선수 히어로 (중계 와이프인) ──────────────────────────── */
+.phero{
+  position:relative;overflow:hidden;border-radius:10px;margin-top:8px;
+  border:1px solid var(--line);background:var(--panel);
+  display:flex;align-items:stretch;min-height:216px;
+  animation:wipe 1s var(--ease) both;
+}
+@keyframes wipe{
+  from{clip-path:inset(0 100% 0 0);opacity:.2}
+  to{clip-path:inset(0 0 0 0);opacity:1}
+}
+.phero::before{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:
+    linear-gradient(105deg,var(--tc,#666) 0%,rgba(0,0,0,0) 42%);
+  opacity:.26;
+}
+.phero .slab{
+  width:186px;flex-shrink:0;position:relative;
+  background:linear-gradient(160deg,rgba(255,255,255,.09),rgba(255,255,255,.02));
+  clip-path:polygon(0 0,100% 0,84% 100%,0 100%);
+  display:flex;align-items:center;justify-content:center;
+}
+.phero .slab .ph{
+  width:118px;height:118px;border-radius:50%;
+  background:linear-gradient(150deg,#233246,#0E1520);
+  border:2px solid rgba(255,255,255,.14);
+  display:flex;align-items:center;justify-content:center;
+  font-size:2.5rem;font-weight:900;color:rgba(255,255,255,.42);
+  margin-right:16px;
+}
+.phero .body{
+  position:relative;flex:1;padding:26px 30px;display:flex;flex-direction:column;justify-content:center;
+}
+.phero .row1{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:9px}
+.chip{
+  font-size:.66rem;font-weight:800;letter-spacing:.05em;
+  padding:4px 9px;border-radius:3px;
+  background:rgba(255,255,255,.08);color:var(--chalk);
+}
+.chip.team{background:var(--tc,#333);color:#fff}
+.chip.hot{background:var(--red);color:#fff}
+.chip.soon{background:rgba(255,197,49,.18);color:var(--amber)}
+.phero h2{
+  font-size:clamp(2.3rem,5.6vw,3.5rem);font-weight:900;
+  letter-spacing:-.05em;line-height:1;
+}
+.phero .sub{color:var(--dim);font-size:.84rem;margin-top:11px;display:flex;gap:9px;align-items:center}
+.stars{color:var(--amber);letter-spacing:.12em;font-size:.9rem}
+
+/* ── 2열 레이아웃 ─────────────────────────────────────────── */
+.cols{display:grid;grid-template-columns:1.05fr .95fr;gap:14px;margin-top:14px}
+.pane{
+  background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:24px;
+}
+.pane-t{
+  font-size:.63rem;font-weight:800;letter-spacing:.2em;color:var(--dimmer);
+  margin-bottom:16px;
+}
+
+/* 연봉 대형 숫자 */
+.money{display:flex;align-items:flex-end;gap:8px;line-height:.86}
+.money .n{
+  font-family:var(--num);font-size:clamp(3.6rem,9vw,5.6rem);font-weight:800;
+  letter-spacing:-.055em;font-variant-numeric:tabular-nums;
+  background:linear-gradient(180deg,#fff 30%,#B9C6D8);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.money .u{font-size:1.15rem;font-weight:800;color:var(--dim);padding-bottom:10px}
+.money-cap{font-size:.76rem;color:var(--dimmer);margin-top:12px}
+
+/* 제구 게이지 = 예측 범위 */
+.gauge{margin-top:22px}
+.gauge .track{
+  position:relative;height:7px;border-radius:4px;
+  background:rgba(255,255,255,.07);
+}
+.gauge .band{
+  position:absolute;top:0;bottom:0;border-radius:4px;
+  background:linear-gradient(90deg,rgba(255,197,49,.28),rgba(255,197,49,.6),rgba(255,197,49,.28));
+  animation:grow 1.1s var(--ease) both .3s;transform-origin:left;
+}
+@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.gauge .dot{
+  position:absolute;top:50%;width:13px;height:13px;border-radius:50%;
+  background:#fff;border:3px solid var(--amber);transform:translate(-50%,-50%);
+  box-shadow:0 0 16px rgba(255,197,49,.7);
+  animation:pop .5s var(--ease) both .9s;
+}
+@keyframes pop{from{transform:translate(-50%,-50%) scale(0)}to{transform:translate(-50%,-50%) scale(1)}}
+.gauge .ends{display:flex;justify-content:space-between;margin-top:9px;font-size:.72rem;color:var(--dimmer)}
+.gauge .lbl{font-size:.68rem;color:var(--dim);margin-bottom:9px;letter-spacing:.04em}
+
+/* ── 전광판 스탯 그리드 ───────────────────────────────────── */
+.sboard{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:5px;overflow:hidden}
+.sb{
+  position:relative;overflow:hidden;background:rgba(0,0,0,.32);padding:15px 16px;
+  transition:background var(--dur-1);
+}
+.sb:hover{background:rgba(255,197,49,.06)}
+.sb::after{
+  content:"";position:absolute;top:0;bottom:0;width:44%;
+  background:linear-gradient(90deg,transparent,rgba(255,197,49,.11),transparent);
+  transform:translateX(-160%);
+}
+.sb:hover::after{animation:scan .7s var(--ease)}
+.sb .k{font-size:.62rem;letter-spacing:.14em;color:var(--dimmer);font-weight:800}
+.sb .v{
+  font-family:var(--num);font-size:1.62rem;font-weight:800;letter-spacing:-.03em;
+  color:var(--amber);margin-top:4px;font-variant-numeric:tabular-nums;
+  text-shadow:0 0 20px rgba(255,197,49,.32);
+}
+.sb .pct{display:flex;align-items:center;gap:7px;margin-top:8px}
+.sb .bar{flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,.09);overflow:hidden}
+.sb .bar i{
+  display:block;height:100%;border-radius:2px;background:var(--grass);
+  animation:grow .9s var(--ease) both;transform-origin:left;
+}
+.sb .pn{font-size:.64rem;color:var(--dim);font-variant-numeric:tabular-nums}
+
+/* ── 비교 (모드 A) ────────────────────────────────────────── */
+.versus{display:grid;grid-template-columns:1fr auto 1fr;gap:18px;align-items:center;margin-top:4px}
+.vs-box{text-align:center;padding:18px 12px;border-radius:6px;background:rgba(0,0,0,.3);border:1px solid var(--line)}
+.vs-box .k{font-size:.63rem;letter-spacing:.14em;color:var(--dimmer);font-weight:800}
+.vs-box .v{font-family:var(--num);font-size:2.5rem;font-weight:800;letter-spacing:-.04em;margin-top:6px;font-variant-numeric:tabular-nums}
+.vs-box.ai .v{color:var(--sky)}
+.vs-box.real .v{color:var(--grass)}
+.vs-mid{
+  font-size:.68rem;font-weight:900;letter-spacing:.14em;color:var(--dimmer);
+}
+.verdict{
+  margin-top:16px;padding:14px 18px;border-radius:6px;
+  border:1px solid rgba(31,214,122,.3);background:rgba(31,214,122,.09);
+  display:flex;align-items:center;gap:13px;
+}
+.verdict .big{font-size:1.16rem;font-weight:900;color:var(--grass);letter-spacing:-.01em;flex-shrink:0}
+.verdict .txt{font-size:.8rem;color:var(--dim);line-height:1.5}
+
+/* ── 핵심 요소 ────────────────────────────────────────────── */
+.factors{display:flex;flex-direction:column;gap:11px}
+.f{display:flex;align-items:center;gap:14px}
+.f .ic{
+  width:34px;height:34px;border-radius:5px;flex-shrink:0;
+  background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;font-size:.95rem;
+}
+.f .nm{font-size:.85rem;font-weight:700;width:158px;flex-shrink:0}
+.f .nm b{display:block;font-size:.68rem;color:var(--dimmer);font-weight:600;margin-top:2px}
+.f .bar{flex:1;height:9px;border-radius:5px;background:rgba(255,255,255,.06);overflow:hidden}
+.f .bar i{
+  display:block;height:100%;border-radius:5px;
+  background:linear-gradient(90deg,var(--red),#FF8A65);
+  animation:grow 1s var(--ease) both;transform-origin:left;
+}
+.f .vl{font-family:var(--num);font-size:.92rem;font-weight:800;width:62px;text-align:right;font-variant-numeric:tabular-nums}
+
+/* ── 구단별 제시가 ────────────────────────────────────────── */
+.offers{display:flex;flex-direction:column;gap:7px}
+.of{
+  position:relative;overflow:hidden;
+  display:flex;align-items:center;gap:13px;
+  padding:11px 15px;border-radius:5px;
+  background:var(--panel);border:1px solid var(--line);
+  border-left:3px solid var(--tc);
+  transition:transform var(--dur-2) var(--ease),background var(--dur-1);
+}
+.of:hover{transform:translateX(4px);background:var(--panel-2)}
+.of .tm{font-weight:800;font-size:.88rem;width:52px;flex-shrink:0}
+.of .track{flex:1;height:11px;border-radius:6px;background:rgba(255,255,255,.05);overflow:hidden}
+.of .track i{
+  display:block;height:100%;border-radius:6px;background:var(--tc);opacity:.85;
+  animation:grow 1.05s var(--ease) both;transform-origin:left;
+}
+.of .amt{
+  font-family:var(--num);font-size:.9rem;font-weight:800;width:106px;text-align:right;
+  flex-shrink:0;font-variant-numeric:tabular-nums;
+}
+.of .fire{font-size:.72rem;width:56px;flex-shrink:0;text-align:right;color:var(--red);font-weight:800}
+
+/* ── 접기 ─────────────────────────────────────────────────── */
+details.more{margin-top:32px;border:1px solid var(--line);border-radius:6px;background:var(--panel);overflow:hidden}
+details.more summary{
+  padding:15px 20px;cursor:pointer;font-size:.82rem;font-weight:700;color:var(--dim);
+  list-style:none;transition:color var(--dur-1),background var(--dur-1);
+}
+details.more summary::-webkit-details-marker{display:none}
+details.more summary:hover{color:var(--chalk);background:var(--panel-2)}
+details.more .inner{padding:0 20px 20px;font-size:.82rem;color:var(--dim);line-height:1.75}
+details.more table{width:100%;border-collapse:collapse;margin-top:10px}
+details.more td,details.more th{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;font-size:.79rem}
+details.more th{color:var(--dimmer);font-weight:700;letter-spacing:.06em;font-size:.68rem}
+details.more td.n{font-family:var(--num);font-weight:800;color:var(--chalk);text-align:right;font-variant-numeric:tabular-nums}
+
+.note{
+  margin-top:14px;padding:13px 16px;border-radius:5px;
+  border:1px solid rgba(76,201,240,.24);background:rgba(76,201,240,.07);
+  font-size:.78rem;color:#9BD5EC;line-height:1.6;
+}
+.note b{color:#CDEBF8}
+
+/* ── 반응형 ───────────────────────────────────────────────── */
+@media (max-width:880px){
+  .cols{grid-template-columns:1fr}
+  .phero{flex-direction:column;min-height:0}
+  .phero .slab{width:100%;clip-path:none;padding:24px 0}
+  .phero .slab .ph{margin:0}
+  .appbar{flex-direction:column;align-items:stretch;gap:13px}
+  .searchbox{max-width:none}
+  .versus{grid-template-columns:1fr;gap:10px}
+  .board{flex-wrap:wrap}
+  .board .cell{min-width:50%;border-bottom:1px solid var(--line)}
+  .f .nm{width:120px}
+  .of .amt{width:88px;font-size:.8rem}
+  .of .fire{display:none}
+}
+
+/* ── 모션 최소화 대응 ─────────────────────────────────────── */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  .phero{clip-path:none;opacity:1}
+}
+</style>
+</head>
+<body>
+
+<div class="switch">
+  <span class="tag">MOCKUP</span>
+  <button data-s="home" aria-pressed="true">① 홈 · 검색</button>
+  <button data-s="future" aria-pressed="false">② 선수 · 미래 FA</button>
+  <button data-s="past" aria-pressed="false">③ 선수 · FA 완료</button>
+</div>
+
+<div class="wrap">
+
+<!-- ════════════════ ① 홈 ════════════════ -->
+<section class="screen on" id="s-home">
+
+  <div class="appbar">
+    <div class="brand"><span class="ball"></span><b>StoveLens <i>AI</i></b></div>
+    <div class="searchbox">
+      <span class="ico">⌕</span>
+      <input value="ㅂㄷㅇ" readonly/>
+      <div class="ac">
+        <div class="ac-row sel">
+          <span class="nm"><em>박동원</em></span>
+          <span class="ac-badge b-soon">2027 FA 예정</span>
+          <span class="mt">LG · 포수 · 36세</span>
+        </div>
+        <div class="ac-row">
+          <span class="nm"><em>박동욱</em></span>
+          <span class="ac-badge b-what">가상 예측</span>
+          <span class="mt">한화 · 내야수</span>
+        </div>
+      </div>
+      <div class="hint">초성으로도 찾을 수 있음 — <b>ㅂㄷㅇ</b> → 박동원</div>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="kicker">KBO FREE AGENT VALUATION</div>
+    <h1>다음 FA는<br/>얼마짜리인가<i>.</i></h1>
+    <p>2018~2026년 KBO FA 계약 140건을 학습한 모델이 최근 3년 성적·나이·스타성을 읽고 연평균 계약금을 추정함. 구단 사정까지 얹어 팀별 제시가도 같이 냄.</p>
+    <div class="board">
+      <div class="cell"><div class="cl">FA 계약 학습</div><div class="cv">140</div></div>
+      <div class="cell"><div class="cl">검색 가능 선수</div><div class="cv">1,146</div></div>
+      <div class="cell"><div class="cl">비교 구단</div><div class="cv">10</div></div>
+      <div class="cell"><div class="cl">시즌 데이터</div><div class="cv">2015–26</div></div>
+    </div>
+  </div>
+
+  <div class="sect"><h2>다음 FA 주목 선수</h2><span>2027–2030 · 실제 FA 예정 명단 기준</span></div>
+  <div class="lineup">
+    <div class="lc" style="--tc:#C30452"><span class="no">01</span><div><div class="nm">박동원</div><div class="mt">LG · 포수 · 2025 우승 주역</div></div><span class="yr">2027</span></div>
+    <div class="lc" style="--tc:#C30452"><span class="no">02</span><div><div class="nm">홍창기</div><div class="mt">LG · 외야수 · 국가대표 리드오프</div></div><span class="yr">2027</span></div>
+    <div class="lc" style="--tc:#131230"><span class="no">03</span><div><div class="nm">정수빈</div><div class="mt">두산 · 외야수 · 프랜차이즈 스타</div></div><span class="yr">2027</span></div>
+    <div class="lc" style="--tc:#EA0029"><span class="no">04</span><div><div class="nm">김호령</div><div class="mt">KIA · 외야수 · 수비형 중견수</div></div><span class="yr">2027</span></div>
+    <div class="lc" style="--tc:#570514"><span class="no">05</span><div><div class="nm">안우진</div><div class="mt">키움 · 투수 · 해외진출 가능성</div></div><span class="yr">2028</span></div>
+    <div class="lc" style="--tc:#315288"><span class="no">06</span><div><div class="nm">박건우</div><div class="mt">NC · 외야수 · 주전 외야수</div></div><span class="yr">2028</span></div>
+  </div>
+
+  <div class="note">
+    이 명단은 사람이 정리해둔 <b>실제 FA 예정 선수 42명</b>(<b>data/future_fa_candidates.csv</b>)에서 가져옴.
+    지금 배포된 앱은 이 파일을 읽지 않고 "데뷔+10년" 자동 계산 목록을 쓰고 있어서 포지션이 전원 "외야수"로 표시됨 — 이번에 이 파일 기준으로 바로잡음.
+  </div>
+
+</section>
+
+
+<!-- ════════════════ ② 미래 FA 선수 ════════════════ -->
+<section class="screen" id="s-future">
+
+  <div class="appbar">
+    <div class="brand"><span class="ball"></span><b>StoveLens <i>AI</i></b></div>
+    <div class="searchbox">
+      <span class="ico">⌕</span>
+      <input value="박동원" readonly/>
+    </div>
+  </div>
+
+  <div class="phero" style="--tc:#C30452">
+    <div class="slab"><div class="ph">박</div></div>
+    <div class="body">
+      <div class="row1">
+        <span class="chip team">LG 트윈스</span>
+        <span class="chip">포수</span>
+        <span class="chip soon">2027년 FA 예정</span>
+      </div>
+      <h2>박동원</h2>
+      <div class="sub"><span class="stars">★★★☆☆</span><span>FA 시점 36세 · 2025 통합우승 주전 포수</span></div>
+    </div>
+  </div>
+
+  <div class="cols">
+    <div class="pane">
+      <div class="pane-t">AI 예상 연봉 · 연평균</div>
+      <div class="money"><span class="n" data-count="6.8">0.0</span><span class="u">억 원</span></div>
+      <div class="money-cap">2027년 FA 기준 · 최근 3년 성적으로 추정</div>
+
+      <div class="gauge">
+        <div class="lbl">예측 범위 — 모델이 얼마나 확신하는지</div>
+        <div class="track">
+          <div class="band" style="left:16%;right:22%"></div>
+          <div class="dot" style="left:47%"></div>
+        </div>
+        <div class="ends"><span>4.2억</span><span>9.6억</span></div>
+      </div>
+    </div>
+
+    <div class="pane">
+      <div class="pane-t">최근 3년 성적 · 리그 내 위치</div>
+      <div class="sboard">
+        <div class="sb"><div class="k">WAR 3년 합</div><div class="v">8.0</div>
+          <div class="pct"><span class="bar"><i style="width:74%;animation-delay:.15s"></i></span><span class="pn">상위 26%</span></div></div>
+        <div class="sb"><div class="k">OPS</div><div class="v">.801</div>
+          <div class="pct"><span class="bar"><i style="width:68%;animation-delay:.25s"></i></span><span class="pn">상위 32%</span></div></div>
+        <div class="sb"><div class="k">홈런 / 시즌</div><div class="v">16.3</div>
+          <div class="pct"><span class="bar"><i style="width:81%;animation-delay:.35s"></i></span><span class="pn">상위 19%</span></div></div>
+        <div class="sb"><div class="k">타점 / 시즌</div><div class="v">61.7</div>
+          <div class="pct"><span class="bar"><i style="width:70%;animation-delay:.45s"></i></span><span class="pn">상위 30%</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sect"><h2>이 예측을 만든 것들</h2><span>모델이 실제로 크게 본 순서</span></div>
+  <div class="pane">
+    <div class="factors">
+      <div class="f"><span class="ic">🏆</span><span class="nm">팀 기여도<b>WAR 3년 합계</b></span><span class="bar"><i style="width:92%"></i></span><span class="vl">8.0</span></div>
+      <div class="f"><span class="ic">💪</span><span class="nm">장타력<b>홈런 / 시즌</b></span><span class="bar"><i style="width:71%;animation-delay:.1s"></i></span><span class="vl">16.3</span></div>
+      <div class="f"><span class="ic">🥎</span><span class="nm">포지션 희소성<b>주전 포수</b></span><span class="bar"><i style="width:64%;animation-delay:.2s"></i></span><span class="vl">상위</span></div>
+      <div class="f"><span class="ic">📉</span><span class="nm">나이<b>FA 시점 36세</b></span><span class="bar"><i style="width:31%;animation-delay:.3s"></i></span><span class="vl">감점</span></div>
+    </div>
+  </div>
+
+  <div class="sect"><h2>구단별 예상 제시가</h2><span>포지션 필요도 · 재정 여력 · 우승 의지 반영</span></div>
+  <div class="offers">
+    <div class="of" style="--tc:#C30452"><span class="tm">LG</span><span class="track"><i style="width:96%"></i></span><span class="amt">6.4 ~ 8.1억</span><span class="fire">잔류 유력</span></div>
+    <div class="of" style="--tc:#131230"><span class="tm">두산</span><span class="track"><i style="width:78%;animation-delay:.07s"></i></span><span class="amt">5.2 ~ 6.6억</span><span class="fire"></span></div>
+    <div class="of" style="--tc:#EA0029"><span class="tm">KIA</span><span class="track"><i style="width:71%;animation-delay:.14s"></i></span><span class="amt">4.7 ~ 6.0억</span><span class="fire"></span></div>
+    <div class="of" style="--tc:#315288"><span class="tm">NC</span><span class="track"><i style="width:58%;animation-delay:.21s"></i></span><span class="amt">3.9 ~ 4.9억</span><span class="fire"></span></div>
+    <div class="of" style="--tc:#F73600"><span class="tm">롯데</span><span class="track"><i style="width:52%;animation-delay:.28s"></i></span><span class="amt">3.5 ~ 4.4억</span><span class="fire"></span></div>
+  </div>
+
+  <details class="more">
+    <summary>▸ 분석 상세 보기 (모델 성능 · 발표용)</summary>
+    <div class="inner">
+      <table>
+        <tr><th>항목</th><th style="text-align:right">타자 모델</th></tr>
+        <tr><td>R² (5-fold OOF, 로그 스케일)</td><td class="n">재측정 후 표시</td></tr>
+        <tr><td>R² (원 스케일, 억 원)</td><td class="n">재측정 후 표시</td></tr>
+        <tr><td>RMSE</td><td class="n">재측정 후 표시</td></tr>
+        <tr><td>MAE</td><td class="n">재측정 후 표시</td></tr>
+        <tr><td>학습 표본</td><td class="n">80명</td></tr>
+      </table>
+      <p style="margin-top:12px">이 숫자는 하드코딩하지 않고 학습 시 저장된 값을 그대로 읽어 표시함. 지금 배포본은 이 자리가 하드코딩이라 실제 성능과 다른 값이 뜨고 있음.</p>
+    </div>
+  </details>
+
+</section>
+
+
+<!-- ════════════════ ③ FA 완료 선수 ════════════════ -->
+<section class="screen" id="s-past">
+
+  <div class="appbar">
+    <div class="brand"><span class="ball"></span><b>StoveLens <i>AI</i></b></div>
+    <div class="searchbox">
+      <span class="ico">⌕</span>
+      <input value="최정" readonly/>
+    </div>
+  </div>
+
+  <div class="phero" style="--tc:#CE0E2D">
+    <div class="slab"><div class="ph">최</div></div>
+    <div class="body">
+      <div class="row1">
+        <span class="chip team">SSG 랜더스</span>
+        <span class="chip">3루수</span>
+        <span class="chip hot">2025년 FA 계약 완료</span>
+      </div>
+      <h2>최정</h2>
+      <div class="sub"><span class="stars">★★★★★</span><span>FA 당시 38세</span></div>
+    </div>
+  </div>
+
+  <div class="cols">
+    <div class="pane">
+      <div class="pane-t">AI 예측 vs 실제 계약</div>
+      <div class="versus">
+        <div class="vs-box ai"><div class="k">AI 예측</div><div class="v" data-count="25.1">0.0</div></div>
+        <div class="vs-mid">VS</div>
+        <div class="vs-box real"><div class="k">실제 계약</div><div class="v" data-count="27.5">0.0</div></div>
+      </div>
+      <div class="verdict">
+        <span class="big">적정 계약</span>
+        <span class="txt">실제 계약이 예측보다 2.4억 높음 (오차 9%). 모델이 본 가치와 시장이 매긴 값이 거의 일치함.</span>
+      </div>
+    </div>
+
+    <div class="pane">
+      <div class="pane-t">FA 직전 3년 성적 · 리그 내 위치</div>
+      <div class="sboard">
+        <div class="sb"><div class="k">WAR 3년 합</div><div class="v">13.5</div>
+          <div class="pct"><span class="bar"><i style="width:88%;animation-delay:.15s"></i></span><span class="pn">상위 12%</span></div></div>
+        <div class="sb"><div class="k">OPS</div><div class="v">.935</div>
+          <div class="pct"><span class="bar"><i style="width:94%;animation-delay:.25s"></i></span><span class="pn">상위 6%</span></div></div>
+        <div class="sb"><div class="k">홈런 / 시즌</div><div class="v">30.7</div>
+          <div class="pct"><span class="bar"><i style="width:97%;animation-delay:.35s"></i></span><span class="pn">상위 3%</span></div></div>
+        <div class="sb"><div class="k">타점 / 시즌</div><div class="v">93.7</div>
+          <div class="pct"><span class="bar"><i style="width:95%;animation-delay:.45s"></i></span><span class="pn">상위 5%</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sect"><h2>이 계약을 만든 것들</h2><span>모델이 실제로 크게 본 순서</span></div>
+  <div class="pane">
+    <div class="factors">
+      <div class="f"><span class="ic">💪</span><span class="nm">장타력<b>홈런 / 시즌 30.7</b></span><span class="bar"><i style="width:97%"></i></span><span class="vl">최상위</span></div>
+      <div class="f"><span class="ic">🏆</span><span class="nm">팀 기여도<b>WAR 3년 합계</b></span><span class="bar"><i style="width:88%;animation-delay:.1s"></i></span><span class="vl">13.5</span></div>
+      <div class="f"><span class="ic">⭐</span><span class="nm">스타성<b>MVP · 골든글러브</b></span><span class="bar"><i style="width:83%;animation-delay:.2s"></i></span><span class="vl">최상위</span></div>
+      <div class="f"><span class="ic">📉</span><span class="nm">나이<b>FA 시점 38세</b></span><span class="bar"><i style="width:14%;animation-delay:.3s"></i></span><span class="vl">큰 감점</span></div>
+    </div>
+  </div>
+
+  <div class="note">
+    FA 계약 이력이 있는 선수는 <b>예측 vs 실제</b>를, 아직 FA 전인 선수는 <b>구단별 제시가</b>를 보여줌.
+    둘 다 아닌 일반 선수를 검색하면 <b>"지금 FA라면?"</b> 가상 예측으로 라벨이 붙고, 최근 3년 출장이 너무 적은 선수는 예측 대신 표본 부족 안내가 나감.
+  </div>
+
+</section>
+
+</div>
+
+<script>
+// 화면 전환
+const btns=[...document.querySelectorAll('.switch button')];
+btns.forEach(b=>b.addEventListener('click',()=>{
+  btns.forEach(x=>x.setAttribute('aria-pressed', x===b));
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
+  document.getElementById('s-'+b.dataset.s).classList.add('on');
+  runCounters();
+  window.scrollTo({top:0});
+}));
+
+// 숫자 카운트업
+function runCounters(){
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.querySelectorAll('.screen.on [data-count]').forEach(el=>{
+    const target=parseFloat(el.dataset.count);
+    if(reduce){el.textContent=target.toFixed(1);return;}
+    const dur=1100, t0=performance.now();
+    (function step(t){
+      const p=Math.min(1,(t-t0)/dur);
+      const e=1-Math.pow(1-p,3);
+      el.textContent=(target*e).toFixed(1);
+      if(p<1) requestAnimationFrame(step);
+    })(t0);
+  });
+}
+runCounters();
+</script>
+</body>
+</html>

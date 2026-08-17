@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>StoveLens AI — 디자인 목업 v2</title>
+<style>
+/* ═══════════════════════════════════════════════════════════
+   토큰 — 야간 구장 / 전광판
+   배경을 그린블랙으로 내려서 네이비 계열 팀 컬러가 살아나게 함
+   ═══════════════════════════════════════════════════════════ */
+:root{
+  --ink:#050A07;
+  --turf:#08110C;
+  --panel:#0C1610;
+  --panel-2:#122019;
+  --line:rgba(255,255,255,.08);
+  --line-2:rgba(255,255,255,.16);
+
+  --chalk:#F2F6F3;
+  --dim:#8C9B92;
+  --dimmer:#54655B;
+
+  --red:#FF4438;
+  --led:#FFD34D;
+
+  --sans:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Malgun Gothic",sans-serif;
+  --num:"Helvetica Neue",Helvetica,Arial,sans-serif;
+  --ease:cubic-bezier(.16,1,.3,1);
+}
+
+/* 팀 컬러 — 어두운 팀은 그린블랙 배경 위 가독성 기준으로 밝기 보정 */
+.t-lg{--tc:#C30452}
+.t-ds{--tc:#3A5BC7}   /* 두산 네이비 #131230 → 보정 */
+.t-kia{--tc:#EA0029}
+.t-ss{--tc:#E0203F}
+.t-sam{--tc:#3E8EE8}  /* 삼성 #074CA1 → 보정 */
+.t-lot{--tc:#4E86DE}  /* 롯데 #041E42 → 보정 */
+.t-nc{--tc:#5A8BD0}
+.t-kw{--tc:#B23A52}   /* 키움 #570514 → 보정 */
+.t-hh{--tc:#FC4E00}
+.t-kt{--tc:#7A8794}   /* KT 블랙 → 보정 */
+
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--ink);color:var(--chalk);font-family:var(--sans);
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+
+/* 깎은 잔디 무늬 + 야간 조명 */
+body::before{
+  content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(680px 340px at 14% -6%, rgba(255,211,77,.10), transparent 62%),
+    radial-gradient(680px 340px at 86% -6%, rgba(255,211,77,.08), transparent 62%),
+    repeating-linear-gradient(74deg,
+      rgba(255,255,255,.026) 0 58px, rgba(0,0,0,0) 58px 116px),
+    var(--turf);
+}
+.wrap{position:relative;z-index:1;max-width:1120px;margin:0 auto;padding:0 24px 120px}
+
+/* 목업 전환기 */
+.switch{
+  position:sticky;top:0;z-index:60;display:flex;gap:6px;align-items:center;
+  padding:11px 24px;background:rgba(5,10,7,.9);backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line);
+}
+.switch .tag{font-size:.64rem;letter-spacing:.18em;color:var(--dimmer);font-weight:800;margin-right:10px}
+.switch button{
+  font-family:var(--sans);font-size:.77rem;font-weight:700;color:var(--dim);
+  background:transparent;border:1px solid var(--line);padding:7px 15px;
+  border-radius:999px;cursor:pointer;transition:all .18s;
+}
+.switch button:hover{color:var(--chalk);border-color:var(--line-2)}
+.switch button[aria-pressed="true"]{color:#0A0A0A;background:var(--led);border-color:var(--led)}
+.screen{display:none}
+.screen.on{display:block;animation:sIn .8s var(--ease) both}
+@keyframes sIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+/* ── 헤더 ─────────────────────────────────────────────────── */
+.appbar{display:flex;align-items:center;gap:24px;padding:26px 0 22px}
+.brand{display:flex;align-items:center;gap:11px;flex-shrink:0}
+.ball{
+  width:32px;height:32px;border-radius:50%;flex-shrink:0;position:relative;
+  background:radial-gradient(circle at 32% 26%,#fff 0 44%,#DDE3DE 45% 100%);
+  animation:spin 8s linear infinite;
+}
+.ball::before,.ball::after{
+  content:"";position:absolute;inset:3px;border-radius:50%;
+  border:1.7px solid var(--red);clip-path:inset(0 62% 0 0);
+}
+.ball::after{transform:rotate(180deg)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.brand b{font-size:1.05rem;font-weight:900;letter-spacing:-.02em}
+.brand b i{color:var(--red);font-style:normal}
+
+.searchbox{position:relative;flex:1;max-width:460px}
+.searchbox input{
+  width:100%;font-family:var(--sans);font-size:.98rem;font-weight:600;color:var(--chalk);
+  background:rgba(0,0,0,.4);border:1px solid var(--line-2);border-radius:3px;
+  padding:14px 16px 14px 44px;outline:none;transition:all .18s;
+}
+.searchbox input:focus{border-color:var(--led);box-shadow:0 0 0 3px rgba(255,211,77,.15)}
+.searchbox .ico{position:absolute;left:16px;top:50%;transform:translateY(-50%);color:var(--dimmer);pointer-events:none}
+.hint{font-size:.7rem;color:var(--dimmer);margin-top:8px}
+.hint b{color:var(--led)}
+
+.ac{
+  position:absolute;top:calc(100% + 8px);left:0;right:0;z-index:40;
+  background:#101A14;border:1px solid var(--line-2);border-radius:4px;
+  overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.7);
+}
+.ac-row{display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid var(--line);cursor:pointer}
+.ac-row:last-child{border-bottom:none}
+.ac-row.sel,.ac-row:hover{background:rgba(255,211,77,.09)}
+.ac-row .nm{font-weight:800;font-size:.95rem}
+.ac-row .nm em{font-style:normal;color:var(--led)}
+.ac-row .mt{font-size:.74rem;color:var(--dim);margin-left:auto}
+.pill{font-size:.6rem;font-weight:800;letter-spacing:.06em;padding:3px 8px;border-radius:2px}
+.p-soon{background:rgba(255,211,77,.16);color:var(--led)}
+.p-what{background:rgba(140,155,146,.16);color:var(--dim)}
+
+/* ── 홈 히어로 — 내야 다이아몬드 ──────────────────────────── */
+.hero{
+  position:relative;overflow:hidden;border-radius:6px;
+  padding:104px 48px 96px;margin-top:6px;
+  border:1px solid var(--line);background:var(--panel);
+}
+.hero .diamond{
+  position:absolute;right:-40px;top:50%;transform:translateY(-50%);
+  width:520px;height:520px;opacity:.55;pointer-events:none;
+}
+.kicker{
+  position:relative;font-size:.66rem;font-weight:800;letter-spacing:.26em;
+  color:var(--led);margin-bottom:26px;
+}
+.hero h1{
+  position:relative;font-size:clamp(3rem,8.5vw,6rem);font-weight:900;
+  line-height:.9;letter-spacing:-.055em;
+}
+.hero h1 i{font-style:normal;color:var(--red)}
+
+/* 전광판 스트립 — LED 도트 텍스처 */
+.board{
+  display:flex;margin-top:64px;position:relative;
+  border:1px solid var(--line-2);border-radius:3px;
+  background:#040A06;box-shadow:inset 0 0 40px rgba(0,0,0,.9);
+}
+.board::before{
+  content:"";position:absolute;inset:0;pointer-events:none;border-radius:3px;
+  background-image:radial-gradient(rgba(255,255,255,.07) .8px, transparent .8px);
+  background-size:4px 4px;
+}
+.board .cell{flex:1;padding:22px 24px;border-right:1px solid var(--line);position:relative}
+.board .cell:last-child{border-right:none}
+.board .cl{font-size:.6rem;letter-spacing:.2em;color:var(--dimmer);font-weight:800}
+.board .cv{
+  font-family:var(--num);font-size:2.1rem;font-weight:800;letter-spacing:-.04em;
+  color:var(--led);margin-top:8px;font-variant-numeric:tabular-nums;
+  text-shadow:0 0 26px rgba(255,211,77,.55);
+}
+
+/* ── 섹션 — 실밥 스티치 구분선 ────────────────────────────── */
+.sect{display:flex;align-items:center;gap:18px;margin:88px 0 26px}
+.sect h2{font-size:1.05rem;font-weight:900;letter-spacing:-.02em;flex-shrink:0}
+.stitch{flex:1;height:12px;opacity:.65}
+
+/* ── 라인업 카드 ──────────────────────────────────────────── */
+.lineup{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.lc{
+  position:relative;overflow:hidden;display:flex;align-items:center;gap:16px;
+  padding:22px 20px;border-radius:4px;background:var(--panel);
+  border:1px solid var(--line);border-left:4px solid var(--tc);
+  cursor:pointer;transition:transform .4s var(--ease),background .18s,border-color .18s;
+}
+.lc:hover{transform:translateY(-4px);background:var(--panel-2);border-color:var(--line-2);border-left-color:var(--tc)}
+.lc::after{
+  content:"";position:absolute;top:0;bottom:0;width:40%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.08),transparent);
+  transform:translateX(-160%);
+}
+.lc:hover::after{animation:scan .8s var(--ease)}
+@keyframes scan{to{transform:translateX(360%)}}
+.lc .yr{
+  font-family:var(--num);font-size:1.05rem;font-weight:800;color:var(--tc);
+  font-variant-numeric:tabular-nums;flex-shrink:0;
+}
+.lc .nm{font-weight:800;font-size:1.12rem;letter-spacing:-.02em}
+.lc .mt{font-size:.72rem;color:var(--dim);margin-top:4px}
+
+/* ── 선수 히어로 ──────────────────────────────────────────── */
+.phero{
+  position:relative;overflow:hidden;border-radius:6px;margin-top:6px;
+  border:1px solid var(--line);background:var(--panel);
+  display:flex;align-items:center;min-height:250px;
+  animation:wipe 1s var(--ease) both;
+}
+@keyframes wipe{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+/* 팀 컬러 사선 필드 */
+.phero::before{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(100deg,var(--tc) -14%,transparent 48%);opacity:.32;
+}
+/* FA 연도 워터마크 */
+.phero .wm{
+  position:absolute;right:26px;bottom:-30px;
+  font-family:var(--num);font-size:12rem;font-weight:800;letter-spacing:-.07em;
+  color:rgba(255,255,255,.035);pointer-events:none;line-height:1;
+}
+.phero .slab{
+  width:200px;flex-shrink:0;align-self:stretch;position:relative;
+  background:rgba(255,255,255,.05);
+  clip-path:polygon(0 0,100% 0,82% 100%,0 100%);
+  display:flex;align-items:center;justify-content:center;
+}
+.phero .ph{
+  width:128px;height:128px;border-radius:50%;margin-right:18px;
+  background:linear-gradient(150deg,#1D2E24,#0A1310);
+  border:2px solid rgba(255,255,255,.14);
+  display:flex;align-items:center;justify-content:center;
+  font-size:2.7rem;font-weight:900;color:rgba(255,255,255,.4);
+}
+.phero .body{position:relative;flex:1;padding:34px 40px}
+.chips{display:flex;gap:8px;margin-bottom:14px}
+.chip{font-size:.66rem;font-weight:800;letter-spacing:.05em;padding:5px 10px;border-radius:2px;background:rgba(255,255,255,.09)}
+.chip.team{background:var(--tc);color:#fff}
+.chip.hot{background:var(--red);color:#fff}
+.chip.soon{background:rgba(255,211,77,.2);color:var(--led)}
+.phero h2{font-size:clamp(2.6rem,6vw,4rem);font-weight:900;letter-spacing:-.055em;line-height:1}
+.phero .sub{color:var(--dim);font-size:.82rem;margin-top:14px}
+.stars{color:var(--led);letter-spacing:.14em}
+
+/* ── 2열 ──────────────────────────────────────────────────── */
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.pane{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:34px 32px}
+.pane-t{font-size:.62rem;font-weight:800;letter-spacing:.22em;color:var(--dimmer);margin-bottom:24px}
+
+.money{display:flex;align-items:flex-end;gap:10px;line-height:.82}
+.money .n{
+  font-family:var(--num);font-size:clamp(4.4rem,11vw,6.4rem);font-weight:800;
+  letter-spacing:-.06em;font-variant-numeric:tabular-nums;color:#fff;
+  text-shadow:0 0 50px rgba(255,255,255,.22);
+}
+.money .u{font-size:1.25rem;font-weight:800;color:var(--dim);padding-bottom:12px}
+
+/* 제구 게이지 */
+.gauge{margin-top:40px}
+.gauge .lbl{font-size:.62rem;color:var(--dimmer);letter-spacing:.22em;font-weight:800;margin-bottom:14px}
+.gauge .track{position:relative;height:6px;border-radius:3px;background:rgba(255,255,255,.07)}
+.gauge .band{
+  position:absolute;top:0;bottom:0;border-radius:3px;
+  background:linear-gradient(90deg,rgba(255,211,77,.25),rgba(255,211,77,.7),rgba(255,211,77,.25));
+  animation:grow 1.1s var(--ease) both .3s;transform-origin:left;
+}
+@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.gauge .dot{
+  position:absolute;top:50%;width:14px;height:14px;border-radius:50%;
+  background:#fff;border:3px solid var(--led);transform:translate(-50%,-50%);
+  box-shadow:0 0 20px rgba(255,211,77,.8);animation:pop .5s var(--ease) both .9s;
+}
+@keyframes pop{from{transform:translate(-50%,-50%) scale(0)}to{transform:translate(-50%,-50%) scale(1)}}
+.gauge .ends{display:flex;justify-content:space-between;margin-top:12px;font-size:.75rem;color:var(--dim);font-family:var(--num);font-weight:700}
+
+/* ── 전광판 스탯 ──────────────────────────────────────────── */
+.sboard{
+  position:relative;display:grid;grid-template-columns:1fr 1fr;
+  gap:1px;background:var(--line-2);border:2px solid var(--line-2);border-radius:3px;overflow:hidden;
+}
+.sb{position:relative;overflow:hidden;background:#040A06;padding:26px 22px;transition:background .18s}
+.sb::before{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background-image:radial-gradient(rgba(255,255,255,.06) .8px,transparent .8px);
+  background-size:4px 4px;
+}
+.sb:hover{background:#0A150F}
+.sb .k{position:relative;font-size:.6rem;letter-spacing:.2em;color:var(--dimmer);font-weight:800}
+.sb .v{
+  position:relative;font-family:var(--num);font-size:2.2rem;font-weight:800;
+  letter-spacing:-.045em;color:var(--led);margin-top:10px;
+  font-variant-numeric:tabular-nums;text-shadow:0 0 24px rgba(255,211,77,.45);
+}
+.sb .bar{position:relative;height:3px;border-radius:2px;background:rgba(255,255,255,.1);margin-top:14px;overflow:hidden}
+.sb .bar i{display:block;height:100%;background:var(--red);animation:grow .9s var(--ease) both;transform-origin:left}
+
+/* ── 비교 ─────────────────────────────────────────────────── */
+.versus{display:grid;grid-template-columns:1fr auto 1fr;gap:20px;align-items:center}
+.vs-box{text-align:center}
+.vs-box .k{font-size:.62rem;letter-spacing:.18em;color:var(--dimmer);font-weight:800}
+.vs-box .v{font-family:var(--num);font-size:3rem;font-weight:800;letter-spacing:-.05em;margin-top:10px;font-variant-numeric:tabular-nums}
+.vs-box.ai .v{color:#7FD4F5}
+.vs-box.real .v{color:#5FE3A1}
+.vs-mid{width:30px;height:30px;border:1px solid var(--line-2);transform:rotate(45deg)}
+.verdict{margin-top:34px;text-align:center}
+.verdict .big{font-size:1.6rem;font-weight:900;color:#5FE3A1;letter-spacing:-.03em}
+.verdict .txt{font-size:.8rem;color:var(--dim);margin-top:8px}
+
+/* ── 핵심 요소 ────────────────────────────────────────────── */
+.factors{display:flex;flex-direction:column;gap:20px}
+.f{display:flex;align-items:center;gap:20px}
+.f .base{width:11px;height:11px;background:var(--red);transform:rotate(45deg);flex-shrink:0}
+.f .nm{font-size:.92rem;font-weight:700;width:130px;flex-shrink:0}
+.f .bar{flex:1;height:8px;border-radius:4px;background:rgba(255,255,255,.06);overflow:hidden}
+.f .bar i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,var(--red),#FFA07A);animation:grow 1s var(--ease) both;transform-origin:left}
+.f .vl{font-family:var(--num);font-size:1rem;font-weight:800;width:66px;text-align:right;font-variant-numeric:tabular-nums}
+
+/* ── 구단별 제시가 ────────────────────────────────────────── */
+.offers{display:flex;flex-direction:column;gap:8px}
+.of{
+  display:flex;align-items:center;gap:18px;padding:16px 20px;border-radius:4px;
+  background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--tc);
+  transition:transform .4s var(--ease),background .18s;
+}
+.of:hover{transform:translateX(5px);background:var(--panel-2)}
+.of .tm{font-weight:800;font-size:.95rem;width:48px;flex-shrink:0;color:var(--tc)}
+.of .track{flex:1;height:10px;border-radius:5px;background:rgba(255,255,255,.05);overflow:hidden}
+.of .track i{display:block;height:100%;border-radius:5px;background:var(--tc);animation:grow 1.05s var(--ease) both;transform-origin:left}
+.of .amt{font-family:var(--num);font-size:.95rem;font-weight:800;width:112px;text-align:right;flex-shrink:0;font-variant-numeric:tabular-nums}
+
+details.more{margin-top:56px;border:1px solid var(--line);border-radius:4px;background:var(--panel)}
+details.more summary{padding:18px 24px;cursor:pointer;font-size:.8rem;font-weight:700;color:var(--dim);list-style:none}
+details.more summary::-webkit-details-marker{display:none}
+details.more summary:hover{color:var(--chalk)}
+details.more .inner{padding:0 24px 22px}
+details.more table{width:100%;border-collapse:collapse}
+details.more td,details.more th{padding:10px 0;border-bottom:1px solid var(--line);font-size:.8rem;text-align:left;color:var(--dim)}
+details.more th{color:var(--dimmer);font-size:.66rem;letter-spacing:.1em}
+details.more td.n{font-family:var(--num);font-weight:800;color:var(--chalk);text-align:right}
+
+@media (max-width:880px){
+  .cols{grid-template-columns:1fr}
+  .phero{flex-direction:column;min-height:0}
+  .phero .slab{width:100%;clip-path:none;padding:28px 0}
+  .phero .ph{margin:0}
+  .phero .body{padding:28px 24px 34px}
+  .phero .wm{display:none}
+  .appbar{flex-direction:column;align-items:stretch;gap:14px}
+  .searchbox{max-width:none}
+  .hero{padding:64px 26px 56px}
+  .hero .diamond{opacity:.2;right:-160px}
+  .board{flex-wrap:wrap}
+  .board .cell{min-width:50%;border-bottom:1px solid var(--line)}
+  .versus{grid-template-columns:1fr;gap:22px}
+  .vs-mid{display:none}
+  .f .nm{width:96px;font-size:.84rem}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  .phero{clip-path:none}
+}
+</style>
+</head>
+<body>
+
+<!-- 실밥 스티치 / 야구장 SVG -->
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="sym-stitch" viewBox="0 0 240 12" preserveAspectRatio="none">
+    <path d="M0 6 H240" stroke="rgba(255,255,255,.1)" stroke-width="1"/>
+    <g stroke="#FF4438" stroke-width="1.6" stroke-linecap="round">
+      <path d="M6 2 L14 6 M6 10 L14 6 M26 2 L34 6 M26 10 L34 6 M46 2 L54 6 M46 10 L54 6
+               M66 2 L74 6 M66 10 L74 6 M86 2 L94 6 M86 10 L94 6 M106 2 L114 6 M106 10 L114 6
+               M126 2 L134 6 M126 10 L134 6 M146 2 L154 6 M146 10 L154 6 M166 2 L174 6 M166 10 L174 6
+               M186 2 L194 6 M186 10 L194 6 M206 2 L214 6 M206 10 L214 6 M226 2 L234 6 M226 10 L234 6"/>
+    </g>
+  </symbol>
+  <symbol id="sym-diamond" viewBox="0 0 400 400">
+    <g fill="none" stroke="rgba(255,255,255,.13)" stroke-width="1.4">
+      <path d="M200 330 L60 190 L200 50 L340 190 Z"/>
+      <path d="M200 330 L10 140 M200 330 L390 140"/>
+      <path d="M14 146 A250 250 0 0 1 386 146" stroke-dasharray="5 7"/>
+      <circle cx="200" cy="190" r="24"/>
+    </g>
+    <g fill="rgba(255,255,255,.16)">
+      <rect x="192" y="322" width="16" height="16" transform="rotate(45 200 330)"/>
+      <rect x="52" y="182" width="16" height="16" transform="rotate(45 60 190)"/>
+      <rect x="192" y="42" width="16" height="16" transform="rotate(45 200 50)"/>
+      <rect x="332" y="182" width="16" height="16" transform="rotate(45 340 190)"/>
+    </g>
+  </symbol>
+</svg>
+
+<div class="switch">
+  <span class="tag">MOCKUP v2</span>
+  <button data-s="home" aria-pressed="true">① 홈</button>
+  <button data-s="future" aria-pressed="false">② 미래 FA</button>
+  <button data-s="past" aria-pressed="false">③ FA 완료</button>
+</div>
+
+<div class="wrap">
+
+<!-- ══════════ ① 홈 ══════════ -->
+<section class="screen on" id="s-home">
+
+  <div class="appbar">
+    <div class="brand"><span class="ball"></span><b>StoveLens <i>AI</i></b></div>
+    <div class="searchbox">
+      <span class="ico">⌕</span>
+      <input value="ㅂㄷㅇ" readonly/>
+      <div class="ac">
+        <div class="ac-row sel"><span class="nm"><em>박동원</em></span><span class="pill p-soon">2027 FA</span><span class="mt">LG · 포수</span></div>
+        <div class="ac-row"><span class="nm"><em>박동욱</em></span><span class="pill p-what">가상</span><span class="mt">한화 · 내야수</span></div>
+      </div>
+      <div class="hint">초성 검색 — <b>ㅂㄷㅇ</b></div>
+    </div>
+  </div>
+
+  <div class="hero">
+    <svg class="diamond"><use href="#sym-diamond"/></svg>
+    <div class="kicker">KBO FREE AGENT VALUATION</div>
+    <h1>다음 FA는<br/>얼마짜리인가<i>.</i></h1>
+    <div class="board">
+      <div class="cell"><div class="cl">학습 계약</div><div class="cv">140</div></div>
+      <div class="cell"><div class="cl">검색 선수</div><div class="cv">1,146</div></div>
+      <div class="cell"><div class="cl">구단</div><div class="cv">10</div></div>
+    </div>
+  </div>
+
+  <div class="sect"><h2>다음 FA 주목 선수</h2><svg class="stitch"><use href="#sym-stitch"/></svg></div>
+  <div class="lineup">
+    <div class="lc t-lg"><span class="yr">2027</span><div><div class="nm">박동원</div><div class="mt">LG · 포수</div></div></div>
+    <div class="lc t-lg"><span class="yr">2027</span><div><div class="nm">홍창기</div><div class="mt">LG · 외야수</div></div></div>
+    <div class="lc t-ds"><span class="yr">2027</span><div><div class="nm">정수빈</div><div class="mt">두산 · 외야수</div></div></div>
+    <div class="lc t-kia"><span class="yr">2027</span><div><div class="nm">김호령</div><div class="mt">KIA · 외야수</div></div></div>
+    <div class="lc t-kw"><span class="yr">2028</span><div><div class="nm">안우진</div><div class="mt">키움 · 투수</div></div></div>
+    <div class="lc t-nc"><span class="yr">2028</span><div><div class="nm">박건우</div><div class="mt">NC · 외야수</div></div></div>
+  </div>
+
+</section>
+
+
+<!-- ══════════ ② 미래 FA ══════════ -->
+<section class="screen" id="s-future">
+
+  <div class="appbar">
+    <div class="brand"><span class="ball"></span><b>StoveLens <i>AI</i></b></div>
+    <div class="searchbox"><span class="ico">⌕</span><input value="박동원" readonly/></div>
+  </div>
+
+  <div class="phero t-lg">
+    <span class="wm">2027</span>
+    <div class="slab"><div class="ph">박</div></div>
+    <div class="body">
+      <div class="chips">
+        <span class="chip team">LG 트윈스</span>
+        <span class="chip">포수</span>
+        <span class="chip soon">2027 FA 예정</span>
+      </div>
+      <h2>박동원</h2>
+      <div class="sub"><span class="stars">★★★☆☆</span> &nbsp; FA 시점 36세</div>
+    </div>
+  </div>
+
+  <div class="cols">
+    <div class="pane">
+      <div class="pane-t">AI 예상 연봉</div>
+      <div class="money"><span class="n" data-count="6.8">0.0</span><span class="u">억 / 년</span></div>
+      <div class="gauge">
+        <div class="lbl">예상 범위</div>
+        <div class="track"><div class="band" style="left:16%;right:22%"></div><div class="dot" style="left:47%"></div></div>
+        <div class="ends"><span>4.2억</span><span>9.6억</span></div>
+      </div>
+    </div>
+
+    <div class="pane">
+      <div class="pane-t">최근 3년</div>
+      <div class="sboard">
+        <div class="sb"><div class="k">WAR</div><div class="v">8.0</div><div class="bar"><i style="width:74%;animation-delay:.15s"></i></div></div>
+        <div class="sb"><div class="k">OPS</div><div class="v">.801</div><div class="bar"><i style="width:68%;animation-delay:.25s"></i></div></div>
+        <div class="sb"><div class="k">홈런</div><div class="v">16</div><div class="bar"><i style="width:81%;animation-delay:.35s"></i></div></div>
+        <div class="sb"><div class="k">타점</div><div class="v">62</div><div class="bar"><i style="width:70%;animation-delay:.45s"></i></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sect"><h2>연봉을 결정한 것</h2><svg class="stitch"><use href="#sym-stitch"/></svg></div>
+  <div class="pane">
+    <div class="factors">
+      <div class="f"><span class="base"></span><span class="nm">팀 기여도</span><span class="bar"><i style="width:92%"></i></span><span class="vl">8.0</span></div>
+      <div class="f"><span class="base"></span><span class="nm">장타력</span><span class="bar"><i style="width:71%;animation-delay:.1s"></i></span><span class="vl">16</span></div>
+      <div class="f"><span class="base"></span><span class="nm">포지션</span><span class="bar"><i style="width:64%;animation-delay:.2s"></i></span><span class="vl">포수</span></div>
+      <div class="f"><span class="base"></span><span class="nm">나이</span><span class="bar"><i style="width:31%;animation-delay:.3s"></i></span><span class="vl">36세</span></div>
+    </div>
+  </div>
+
+  <div class="sect"><h2>구단별 예상 제시가</h2><svg class="stitch"><use href="#sym-stitch"/></svg></div>
+  <div class="offers">
+    <div class="of t-lg"><span class="tm">LG</span><span class="track"><i style="width:96%"></i></span><span class="amt">6.4 ~ 8.1억</span></div>
+    <div class="of t-ds"><span class="tm">두산</span><span class="track"><i style="width:78%;animation-delay:.07s"></i></span><span class="amt">5.2 ~ 6.6억</span></div>
+    <div class="of t-kia"><span class="tm">KIA</span><span class="track"><i style="width:71%;animation-delay:.14s"></i></span><span class="amt">4.7 ~ 6.0억</span></div>
+    <div class="of t-nc"><span class="tm">NC</span><span class="track"><i style="width:58%;animation-delay:.21s"></i></span><span class="amt">3.9 ~ 4.9억</span></div>
+    <div class="of t-lot"><span class="tm">롯데</span><span class="track"><i style="width:52%;animation-delay:.28s"></i></span><span class="amt">3.5 ~ 4.4억</span></div>
+  </div>
+
+  <details class="more">
+    <summary>▸ 분석 상세 (발표용)</summary>
+    <div class="inner">
+      <table>
+        <tr><th>지표</th><th style="text-align:right">타자 모델</th></tr>
+        <tr><td>R² (5-fold OOF · 로그)</td><td class="n">재측정 후</td></tr>
+        <tr><td>R² (원 스케일)</td><td class="n">재측정 후</td></tr>
+        <tr><td>RMSE</td><td class="n">재측정 후</td></tr>
+        <tr><td>MAE</td><td class="n">재측정 후</td></tr>
+        <tr><td>학습 표본</td><td class="n">80명</td></tr>
+      </table>
+    </div>
+  </details>
+
+</section>
+
+
+<!-- ══════════ ③ FA 완료 ══════════ -->
+<section class="screen" id="s-past">
+
+  <div class="appbar">
+    <div class="brand"><span class="ball"></span><b>StoveLens <i>AI</i></b></div>
+    <div class="searchbox"><span class="ico">⌕</span><input value="최정" readonly/></div>
+  </div>
+
+  <div class="phero t-ss">
+    <span class="wm">2025</span>
+    <div class="slab"><div class="ph">최</div></div>
+    <div class="body">
+      <div class="chips">
+        <span class="chip team">SSG 랜더스</span>
+        <span class="chip">3루수</span>
+        <span class="chip hot">2025 FA 완료</span>
+      </div>
+      <h2>최정</h2>
+      <div class="sub"><span class="stars">★★★★★</span> &nbsp; FA 당시 38세</div>
+    </div>
+  </div>
+
+  <div class="cols">
+    <div class="pane">
+      <div class="pane-t">예측 vs 실제</div>
+      <div class="versus">
+        <div class="vs-box ai"><div class="k">AI 예측</div><div class="v" data-count="25.1">0.0</div></div>
+        <div class="vs-mid"></div>
+        <div class="vs-box real"><div class="k">실제 계약</div><div class="v" data-count="27.5">0.0</div></div>
+      </div>
+      <div class="verdict">
+        <div class="big">적정 계약</div>
+        <div class="txt">오차 9% · 시장가와 거의 일치</div>
+      </div>
+    </div>
+
+    <div class="pane">
+      <div class="pane-t">FA 직전 3년</div>
+      <div class="sboard">
+        <div class="sb"><div class="k">WAR</div><div class="v">13.5</div><div class="bar"><i style="width:88%;animation-delay:.15s"></i></div></div>
+        <div class="sb"><div class="k">OPS</div><div class="v">.935</div><div class="bar"><i style="width:94%;animation-delay:.25s"></i></div></div>
+        <div class="sb"><div class="k">홈런</div><div class="v">31</div><div class="bar"><i style="width:97%;animation-delay:.35s"></i></div></div>
+        <div class="sb"><div class="k">타점</div><div class="v">94</div><div class="bar"><i style="width:95%;animation-delay:.45s"></i></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sect"><h2>연봉을 결정한 것</h2><svg class="stitch"><use href="#sym-stitch"/></svg></div>
+  <div class="pane">
+    <div class="factors">
+      <div class="f"><span class="base"></span><span class="nm">장타력</span><span class="bar"><i style="width:97%"></i></span><span class="vl">31</span></div>
+      <div class="f"><span class="base"></span><span class="nm">팀 기여도</span><span class="bar"><i style="width:88%;animation-delay:.1s"></i></span><span class="vl">13.5</span></div>
+      <div class="f"><span class="base"></span><span class="nm">스타성</span><span class="bar"><i style="width:83%;animation-delay:.2s"></i></span><span class="vl">최상위</span></div>
+      <div class="f"><span class="base"></span><span class="nm">나이</span><span class="bar"><i style="width:14%;animation-delay:.3s"></i></span><span class="vl">38세</span></div>
+    </div>
+  </div>
+
+</section>
+
+</div>
+
+<script>
+const btns=[...document.querySelectorAll('.switch button')];
+btns.forEach(b=>b.addEventListener('click',()=>{
+  btns.forEach(x=>x.setAttribute('aria-pressed',x===b));
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
+  document.getElementById('s-'+b.dataset.s).classList.add('on');
+  run();window.scrollTo({top:0});
+}));
+function run(){
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.querySelectorAll('.screen.on [data-count]').forEach(el=>{
+    const t=parseFloat(el.dataset.count);
+    if(reduce){el.textContent=t.toFixed(1);return;}
+    const d=1100,t0=performance.now();
+    (function s(n){const p=Math.min(1,(n-t0)/d),e=1-Math.pow(1-p,3);
+      el.textContent=(t*e).toFixed(1);if(p<1)requestAnimationFrame(s);})(t0);
+  });
+}
+run();
+</script>
+</body>
+</html>
