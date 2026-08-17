@@ -211,7 +211,7 @@ flowchart TD
 ```
 
 - **개발 환경**: `notebooks/`에서 노트북 실행 순서(①~④)대로 재현하며 로컬 CSV·pkl 파일을 직접 다룬다.
-- **배포 환경**: Streamlit 앱은 `models/`, `data/`에 이미 커밋된 학습 결과물(.pkl/.csv)만 읽는다 — 배포 서버에서 재학습하지 않는다. 네이버 API는 오프라인 수집 단계에서만 호출되고, 런타임에는 선수 사진 조회(`get_player_photo`) 시 다시 호출된다.
+- **배포 환경**: Streamlit 앱은 `models/`, `data/`에 이미 커밋된 학습 결과물(.pkl/.csv)만 읽는다 — 배포 서버에서 재학습하지 않는다. 네이버 API는 `scripts/`의 오프라인 수집 단계에서만 호출한다. 선수 사진도 `data/player_photos.csv`로 미리 받아 두므로 앱 실행 중 외부 호출은 없다.
 
 ---
 
