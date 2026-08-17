@@ -152,14 +152,22 @@ streamlit run app/app.py
 pytest tests/ -v
 ```
 
-### 데이터 파이프라인 재현 (노트북 실행 순서)
+### 노트북 (분석 과정)
 
 ```
-1. data_collect_test.ipynb       — 네이버 KBO 선수 통계 수집
-2. fa_contract_collect.ipynb     — FA 계약 데이터 수집
-3. make_training_dataset.ipynb   — 학습 데이터셋 생성
-4. clean_model_train.ipynb       — 모델 학습·평가·SHAP 분석
+notebooks/01_data_check.ipynb      — 수집 커버리지·결측·타깃 분포 확인
+notebooks/02_preprocessing.ipynb   — 생년 교정, 3년 집계, 인코딩, 백분위, 누수 제거
+notebooks/03_eda.ipynb             — 로그 변환·나이 곡선 등 모델 설계 근거
+notebooks/04_model_train.ipynb     — 모델 7종 비교 → 블렌딩 → 평가·저장
 ```
+
+노트북은 `scripts/gen_notebooks_v8.py`가 만든다. 직접 편집하지 않고 생성 스크립트를 고친다.
+04는 위 성능 표(타자 0.618 / 투수 0.645)를 그대로 재현한다.
+데이터 수집·학습 파이프라인 자체는 `scripts/`가 담당하고, 노트북은 **읽기 전용**이다
+(운영 모델 `models/*.pkl`을 덮어쓰지 않는다).
+
+> `notebooks/archive/`의 3개는 v4/v5 시절 기록이다. 그 뒤 데이터 교정이 여러 번
+> 들어가 현재 수치와 맞지 않으므로 참고용으로만 둔다.
 
 ---
 
