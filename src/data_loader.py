@@ -69,6 +69,22 @@ def load_awards():
 
 
 @st.cache_data
+def load_extensions() -> pd.DataFrame:
+    """비FA 다년계약. FA 계약과 섞지 않는다.
+
+    FA를 거치지 않고 구단과 장기 계약을 맺은 선수는 계약 기간 동안 시장에 나오지
+    않는다. fa_contracts_v4.csv에 넣으면 FA가 아닌 계약이 학습 정답에 섞이므로
+    파일을 따로 둔다. 화면에서만 쓴다.
+    """
+    path = DATA / "non_fa_extensions.csv"
+    if not path.exists():
+        return pd.DataFrame(
+            columns=["player_name", "team", "sign_date", "annual_avg_salary", "through_year"]
+        )
+    return pd.read_csv(path, encoding="utf-8-sig")
+
+
+@st.cache_data
 def load_birth_lookup() -> dict[int, int]:
     """선수 생년. player_id -> 연도. 없으면 빈 dict.
 

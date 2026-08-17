@@ -52,6 +52,7 @@ class Context:
     awards: pd.DataFrame
     fa: pd.DataFrame
     future: pd.DataFrame
+    extensions: pd.DataFrame
     birth: dict
     teams: pd.DataFrame
     position_need: pd.DataFrame
@@ -70,7 +71,7 @@ class Card:
     name: str
     team: str
     is_hitter: bool
-    mode: str                 # past | future | active
+    mode: str                 # past | extension | future | active
     position_code: str | None
     position_label: str
     role: str | None
@@ -142,6 +143,20 @@ def _past_contract(context: Context, player_id: int, name: str) -> pd.Series | N
     return None
 
 
+def _extension_of(context: Context, name: str, master_row: pd.Series) -> pd.Series | None:
+    """이 선수의 비FA 다년계약. 이름과 소속팀이 둘 다 맞을 때만 인정한다.
+
+    같은 이름이 96쌍 있어 이름만으로 붙이면 다른 사람 계약이 딸려온다.
+    """
+    table = context.extensions
+    if table.empty:
+        return None
+
+    team = str(master_row.get("team_latest") or "")
+    found = table[(table["player_name"] == name) & (table["team"] == team)]
+    return None if found.empty else found.sort_values("sign_date").iloc[-1]
+
+
 def build_card(context: Context, player_id: int) -> Card:
     """선수 한 명의 예측 카드. 표본이 부족하면 NotEnoughRecord를 던진다."""
     found = context.master[context.master["player_id"] == player_id]
@@ -158,10 +173,18 @@ def build_card(context: Context, player_id: int) -> Card:
 
     future_row = context.future[context.future["player_name"] == name]
     contract = _past_contract(context, player_id, name)
+    extension = _extension_of(context, name, master_row)
 
+    # 비FA 다년계약을 맺은 선수는 그 기간 동안 FA 시장에 나오지 않는다.
+    # 다음 FA가 얼마일지를 묻는 것 자체가 틀린 질문이라 가장 먼저 걸러낸다.
+    if extension is not None:
+        mode = "extension"
+        fa_year = int(str(extension["sign_date"])[:4])
+        base_year = fa_year - 1
+        actual = float(extension["annual_avg_salary"])
     # 앞으로 FA가 예정된 선수라면 그쪽이 우선이다. 이미 끝난 계약보다
     # 다음 계약이 얼마일지가 이 서비스에서 궁금한 값이다.
-    if not future_row.empty:
+    elif not future_row.empty:
         mode = "future"
         fa_year = int(future_row.iloc[0]["fa_year_expected"])
         base_year = int(player_seasons["collect_year"].max())
@@ -296,7 +319,7 @@ def stat_panel(card: Card) -> list[dict]:
 
 
 def verdict(card: Card) -> dict:
-    """예측과 실제 계약의 차이를 한 줄로. mode=past 전용."""
+    """예측과 실제 계약의 차이를 한 줄로. 실제 계약이 있는 past·extension 전용."""
     gap = card.actual - card.predicted
     error = abs(gap) / card.actual if card.actual else 0.0
 

@@ -3,10 +3,12 @@
 호출 위치: src/ui/pages.py route()
 데이터 파일을 읽지 않는다. app/app.py가 만든 Context를 받는다.
 
-화면은 세 갈래로 갈린다.
-  past   — 이미 FA 계약을 맺은 선수. 예측과 실제 계약을 나란히 놓는다.
-  future — 앞으로 FA가 예정된 선수. 예상 연봉과 구단별 제시가를 낸다.
-  active — 둘 다 아닌 현역. FA가 온다면 얼마일지를 참고값으로 낸다.
+화면은 네 갈래로 갈린다.
+  past      — 이미 FA 계약을 맺은 선수. 예측과 실제 계약을 나란히 놓는다.
+  extension — 비FA 다년계약으로 묶인 선수. 예측과 그 계약을 나란히 놓는다.
+              계약 기간에는 시장에 나오지 않으므로 구단별 제시가를 내지 않는다.
+  future    — 앞으로 FA가 예정된 선수. 예상 연봉과 구단별 제시가를 낸다.
+  active    — 셋 다 아닌 현역. FA가 온다면 얼마일지를 참고값으로 낸다.
 표본이 모자라면 숫자를 내지 않고 왜 못 내는지 적는다.
 
 R²·RMSE·모델 이름 같은 말은 화면에 쓰지 않는다.
@@ -36,9 +38,13 @@ from src.ui import components as ui
 
 MODE_TITLE = {
     "past": "FA 직전 3시즌 성적",
+    "extension": "계약 직전 3시즌 성적",
     "future": "최근 3시즌 성적",
     "active": "최근 3시즌 성적",
 }
+
+# 실제 계약이 있어 예측과 나란히 놓을 수 있는 모드.
+SIGNED_MODES = ("past", "extension")
 
 NEED_LABEL = [(0.75, "보강 시급"), (0.5, "보강 검토"), (0.0, "여유")]
 
@@ -74,7 +80,8 @@ def render(context: Context, player_id: int) -> None:
         league_of(context, card.is_hitter),
     )))
 
-    if card.mode != "past":
+    # 이미 계약이 묶인 선수에게 구단별 제시가를 내면 시장에 나올 것처럼 읽힌다.
+    if card.mode not in SIGNED_MODES:
         _html(ui.section("구단별 예상 제시가", "포지션 필요도 · 우승 의지 · 재정 여력 반영"))
         _html(ui.offer_list(team_offers(context, card), _need_label))
 
@@ -107,7 +114,7 @@ def _left_pane(context: Context, card) -> str:
         reference += f", 그중 {card.position_label}는 <b>{position[0]:.1f}억</b>({position[1]}건)"
     reference += "."
 
-    if card.mode == "past":
+    if card.mode in SIGNED_MODES:
         return ui.versus_panel(card, verdict(card), reference)
 
     if card.mode == "active":

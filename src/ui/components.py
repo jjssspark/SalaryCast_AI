@@ -50,6 +50,7 @@ STAT_TIPS = {
 
 MODE_CHIP = {
     "past": ("hot", "{year} FA 완료"),
+    "extension": ("hot", "{year} 비FA 다년계약"),
     "future": ("soon", "{year} FA 예정"),
     "active": ("", "{year} 기준 예상"),
 }
