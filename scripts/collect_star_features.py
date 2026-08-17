@@ -18,6 +18,14 @@
   포스트시즌 — 기존 데이터에서 140명 중 대부분이 1이라 사실상 상수였다.
 
 위키데이터도 봤지만 KBO 골든글러브 수상자가 4명뿐이라 못 쓴다.
+
+국가대표는 대회 문서가 아니라 '분류:{연도}년 ... 참가 선수'에서 읽는다.
+대회 문서는 구조가 제각각이라 결과가 들쭉날쭉했다. 아시안게임 3개 대회는
+문서에 명단이 아예 없어 0~5명만 나왔고, 올림픽·프리미어12는 반대로 감독·코치가
+섞여 실제 엔트리보다 많이 잡혔다(2021 올림픽 31명, 실제 엔트리 24명). 분류는
+대회마다 같은 이름 규칙을 쓰고 사람 단위로 붙어 있어 결과가 일정하다. 다만
+참가국 선수가 전부 들어 있으므로 '분류:대한민국의 야구 선수'가 붙은 사람만 남긴다.
+APBC 2017·2023만 참가 선수 분류가 없어 종전대로 문서에서 읽는다.
 """
 
 from __future__ import annotations
@@ -33,26 +41,32 @@ DATA_DIR = Path("data")
 API = "https://ko.wikipedia.org/w/api.php"
 USER_AGENT = "SalaryCastAI/1.0 (KBO FA salary study; contact hsyoun585@gmail.com)"
 
-# 국가대표 명단이 실린 문서. 대회마다 문서 이름 규칙이 달라 직접 적는다.
-# 우리 시즌 데이터가 2013년부터라 2006년 이후 대회만 본다.
-NATIONAL_TEAM_PAGES = [
-    ("2026 WBC", "2026년 월드 베이스볼 클래식"),
-    ("2024 프리미어12", "2024년 WBSC 프리미어 12"),
-    ("2023 APBC", "2023년 아시아 프로야구 챔피언십"),
-    ("2023 WBC", "2023년 월드 베이스볼 클래식 선수 명단"),
-    ("2022 아시안게임", "2022년 아시안 게임 야구"),
-    ("2021 올림픽", "2020년 하계 올림픽 야구 선수 명단"),
-    ("2019 프리미어12", "2019년 WBSC 프리미어 12"),
-    ("2018 아시안게임", "2018년 아시안 게임 야구"),
-    ("2017 APBC", "2017년 아시아 프로야구 챔피언십"),
-    ("2017 WBC", "2017년 월드 베이스볼 클래식 선수 명단"),
-    ("2015 프리미어12", "2015년 WBSC 프리미어 12"),
-    ("2014 아시안게임", "2014년 아시안 게임 야구"),
-    ("2013 WBC", "2013년 월드 베이스볼 클래식 선수 명단"),
-    ("2009 WBC", "2009년 월드 베이스볼 클래식"),
-    ("2008 올림픽", "2008년 하계 올림픽 야구"),
-    ("2006 WBC", "2006년 월드 베이스볼 클래식 선수 명단"),
+# 국가대표 명단을 읽어 올 분류. 우리 시즌 데이터가 2013년부터라 2006년 이후만 본다.
+NATIONAL_TEAM_CATEGORIES = [
+    ("2026 WBC", "분류:2026년 월드 베이스볼 클래식 참가 선수"),
+    ("2024 프리미어12", "분류:2024년 WBSC 프리미어 12 참가 선수"),
+    ("2023 WBC", "분류:2023년 월드 베이스볼 클래식 참가 선수"),
+    ("2022 아시안게임", "분류:2022년 아시안 게임 야구 참가 선수"),
+    ("2021 올림픽", "분류:2020년 하계 올림픽 야구 참가 선수"),
+    ("2019 프리미어12", "분류:2019년 WBSC 프리미어 12 참가 선수"),
+    ("2018 아시안게임", "분류:2018년 아시안 게임 야구 참가 선수"),
+    ("2017 WBC", "분류:2017년 월드 베이스볼 클래식 참가 선수"),
+    ("2015 프리미어12", "분류:2015년 WBSC 프리미어 12 참가 선수"),
+    ("2014 아시안게임", "분류:2014년 아시안 게임 야구 참가 선수"),
+    ("2013 WBC", "분류:2013년 월드 베이스볼 클래식 참가 선수"),
+    ("2009 WBC", "분류:2009년 월드 베이스볼 클래식 참가 선수"),
+    ("2008 올림픽", "분류:2008년 하계 올림픽 야구 참가 선수"),
+    ("2006 WBC", "분류:2006년 월드 베이스볼 클래식 참가 선수"),
 ]
+
+# 참가 선수 분류가 없는 대회. 종전대로 대회 문서에서 읽는다.
+NATIONAL_TEAM_PAGES = [
+    ("2023 APBC", "2023년 아시아 프로야구 챔피언십"),
+    ("2017 APBC", "2017년 아시아 프로야구 챔피언십"),
+]
+
+# 분류에는 참가국 선수가 전부 들어 있다. 한국 선수만 남기는 표식.
+KOREAN_PLAYER_CATEGORY = "분류:대한민국의 야구 선수"
 
 # [[문서명|표시이름]] 또는 [[이름]]
 LINK = re.compile(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]")
@@ -62,27 +76,97 @@ YEAR_LINK = re.compile(r"\[\[(\d{4})년[^\]|]*\|(\d{4})\]\]|\[\[(\d{4})년[^\]]*
 NOT_PLAYER = ("감독", "코치", "야구인", "위원", "해설")
 
 
-def fetch_wikitext(title: str) -> str | None:
-    """문서 원문(위키텍스트). 없으면 None.
+SESSION = requests.Session()
+SESSION.headers.update({"User-Agent": USER_AGENT})
+
+
+def query(**params) -> dict:
+    """위키 API 한 번. 읽기 타임아웃이 간헐적으로 나서 두 번 더 시도한다.
 
     macOS 시스템 파이썬의 urllib은 루트 인증서를 못 찾아 SSL 검증에서 막힌다.
     requests는 certifi를 들고 다녀서 그냥 된다.
     """
-    response = requests.get(
-        API,
-        params={
-            "action": "query", "format": "json", "prop": "revisions",
-            "rvprop": "content", "rvslots": "main", "titles": title, "redirects": "1",
-        },
-        headers={"User-Agent": USER_AGENT},
-        timeout=30,
-    )
-    response.raise_for_status()
+    params.update({"action": "query", "format": "json"})
+    for attempt in range(3):
+        try:
+            response = SESSION.get(API, params=params, timeout=60)
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException:
+            if attempt == 2:
+                raise
+            time.sleep(3)
+    raise AssertionError("unreachable")
 
-    page = next(iter(response.json()["query"]["pages"].values()))
+
+def fetch_wikitext(title: str) -> str | None:
+    """문서 원문(위키텍스트). 없으면 None."""
+    result = query(
+        prop="revisions", rvprop="content", rvslots="main",
+        titles=title, redirects="1",
+    )
+    page = next(iter(result["query"]["pages"].values()))
     if "missing" in page:
         return None
     return page["revisions"][0]["slots"]["main"]["*"]
+
+
+def category_members(category: str) -> list[str]:
+    """분류에 속한 일반 문서 제목. 500건이 넘으면 이어 받는다."""
+    titles: list[str] = []
+    cont: dict = {}
+    while True:
+        result = query(
+            list="categorymembers", cmtitle=category,
+            cmlimit="500", cmnamespace=0, **cont,
+        )
+        titles += [page["title"] for page in result["query"]["categorymembers"]]
+        if "continue" not in result:
+            return titles
+        cont = result["continue"]
+
+
+def categories_of(titles: list[str]) -> dict[str, list[str]]:
+    """문서 제목 -> 그 문서에 붙은 분류.
+
+    cllimit 상한이 문서별이 아니라 응답 전체에 걸리므로, 한 번에 많이 물으면
+    뒤쪽 문서의 분류가 잘려서 온다. 10개씩 끊고 continue도 따라간다.
+    """
+    found: dict[str, list[str]] = {title: [] for title in titles}
+    for start in range(0, len(titles), 10):
+        chunk = titles[start: start + 10]
+        cont: dict = {}
+        while True:
+            result = query(prop="categories", cllimit="max", titles="|".join(chunk), **cont)
+            for page in result["query"]["pages"].values():
+                found.setdefault(page["title"], [])
+                found[page["title"]] += [c["title"] for c in page.get("categories", [])]
+            if "continue" not in result:
+                break
+            cont = result["continue"]
+        time.sleep(0.3)
+    return found
+
+
+def roster_from_category(label: str, category: str) -> tuple[list[dict], str]:
+    """분류에서 한국 선수만 골라 국가대표 기록으로 만든다."""
+    members = category_members(category)
+    if not members:
+        return [], f"분류 없음: {category}"
+
+    marks = categories_of(members)
+    names = {
+        # '김광현 (야구 선수)' -> '김광현'
+        re.sub(r"\s*\([^)]*\)\s*", "", title).strip()
+        for title in members
+        if KOREAN_PLAYER_CATEGORY in marks.get(title, [])
+    }
+    rows = [
+        {"player_name": name, "year": int(label[:4]), "team": "",
+         "award": "NT", "source": label}
+        for name in sorted(names)
+    ]
+    return rows, f"{category} ({len(members)}명 중 한국 {len(names)}명)"
 
 
 def clean_name(raw: str) -> str:
@@ -346,11 +430,19 @@ def main() -> None:
         print(f"  {label:8s} {len(found):4d}건  {years[0]}~{years[-1]}")
         time.sleep(1)
 
-    print("\n  국가대표")
+    print("\n  국가대표 — 분류")
+    for label, category in NATIONAL_TEAM_CATEGORIES:
+        found, where = roster_from_category(label, category)
+        rows.extend(found)
+        mark = "" if 20 <= len(found) <= 32 else "  <- 확인 필요"
+        print(f"    {label:16s} {len(found):3d}명  ({where}){mark}")
+        time.sleep(0.5)
+
+    print("\n  국가대표 — 문서 (참가 선수 분류가 없는 대회)")
     for label, title in NATIONAL_TEAM_PAGES:
         found, where = resolve_roster(label, title)
         rows.extend(found)
-        mark = "" if 20 <= len(found) <= 40 else "  <- 확인 필요"
+        mark = "" if 20 <= len(found) <= 32 else "  <- 확인 필요"
         print(f"    {label:16s} {len(found):3d}명  ({where}){mark}")
         time.sleep(1)
 
