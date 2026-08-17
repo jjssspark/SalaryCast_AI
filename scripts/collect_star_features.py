@@ -25,7 +25,9 @@
 섞여 실제 엔트리보다 많이 잡혔다(2021 올림픽 31명, 실제 엔트리 24명). 분류는
 대회마다 같은 이름 규칙을 쓰고 사람 단위로 붙어 있어 결과가 일정하다. 다만
 참가국 선수가 전부 들어 있으므로 '분류:대한민국의 야구 선수'가 붙은 사람만 남긴다.
-APBC 2017·2023만 참가 선수 분류가 없어 종전대로 문서에서 읽는다.
+APBC만 참가 선수 분류가 없다. 2017은 문서에서 읽히지만 2023은 명단 문서도 영어판
+대회 문서도 없어 아예 못 얻는다. 2023 APBC 26명은 data/national_team_manual.csv에
+손으로 적어 두고 여기서 읽는다.
 """
 
 from __future__ import annotations
@@ -61,9 +63,13 @@ NATIONAL_TEAM_CATEGORIES = [
 
 # 참가 선수 분류가 없는 대회. 종전대로 대회 문서에서 읽는다.
 NATIONAL_TEAM_PAGES = [
-    ("2023 APBC", "2023년 아시아 프로야구 챔피언십"),
     ("2017 APBC", "2017년 아시아 프로야구 챔피언십"),
 ]
+
+# 위키백과로는 못 얻는 명단. 손으로 채운 뒤 여기서 읽는다.
+# 2023 APBC는 참가 선수 분류도, 명단 문서도, 영어판 대회 문서도 없다. 대회 문서를
+# 훑으면 한국 선수 5명에 대만 선수와 '도쿄'·'야구' 같은 낱말이 10건 섞여 나왔다.
+MANUAL_ROSTER_FILE = DATA_DIR / "national_team_manual.csv"
 
 # 분류에는 참가국 선수가 전부 들어 있다. 한국 선수만 남기는 표식.
 KOREAN_PLAYER_CATEGORY = "분류:대한민국의 야구 선수"
@@ -445,6 +451,12 @@ def main() -> None:
         mark = "" if 20 <= len(found) <= 32 else "  <- 확인 필요"
         print(f"    {label:16s} {len(found):3d}명  ({where}){mark}")
         time.sleep(1)
+
+    print("\n  국가대표 — 수기")
+    manual = pd.read_csv(MANUAL_ROSTER_FILE)
+    rows.extend(manual[["player_name", "year", "team", "award", "source"]].fillna("").to_dict("records"))
+    for source, group in manual.groupby("source"):
+        print(f"    {source:22s} {len(group):3d}명  ({MANUAL_ROSTER_FILE})")
 
     table = (
         pd.DataFrame(rows)
