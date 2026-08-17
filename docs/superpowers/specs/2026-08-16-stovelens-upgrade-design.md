@@ -281,17 +281,26 @@ player_name, photo_url, photo_file
 
 ## 8. 검증 기준
 
-| 항목 | 기준 |
-|---|---|
-| 테스트 | `pytest` 전체 통과 |
-| 피처 일관성 | 학습 경로와 서빙 경로가 동일 입력에 동일 피처 벡터 생성 (테스트로 고정) |
-| 누수 제거 | `market_level`이 예측 시점 이후 정보를 참조하지 않음 (테스트로 고정) |
-| 3년 평균 | 시즌 2개인 선수의 OPS가 축소되지 않음 (테스트로 고정) |
-| 성능 표시 | 화면 수치 = meta pkl 저장값 (하드코딩 0건) |
-| 검색 | 임의 선수 20명 표본에 대해 이름·초성 검색이 모두 성공 |
-| 모드 분기 | A / B / C / D 각 1명 이상 실제 사례로 확인 |
-| 사진 | 앱 실행 중 외부 HTTP 요청 0건 |
-| 기동 | `streamlit run app/app.py` 무오류 기동 |
+| 항목 | 기준 | 상태 (2026-08-17) |
+|---|---|---|
+| 테스트 | `pytest` 전체 통과 | ✅ 39건 통과 |
+| 피처 일관성 | 학습 경로와 서빙 경로가 동일 입력에 동일 피처 벡터 생성 (테스트로 고정) | ✅ `tests/test_serving_consistency.py` 5건 |
+| 누수 제거 | `market_level`이 예측 시점 이후 정보를 참조하지 않음 (테스트로 고정) | ✅ `test_market_level_prior_uses_only_earlier_years` |
+| 3년 평균 | 시즌 2개인 선수의 OPS가 축소되지 않음 (테스트로 고정) | ✅ `test_aggregate_seasons_divides_by_actual_season_count` |
+| 성능 표시 | 화면 수치 = meta pkl 저장값 (하드코딩 0건) | ✅ `src/`·`app/`에 성능 상수 0건 |
+| 검색 | 임의 선수 20명 표본에 대해 이름·초성 검색이 모두 성공 | ✅ `tests/test_search.py` 9건 (마스터에서 등간격 표본 추출) |
+| 모드 분기 | A / B / C / D 각 1명 이상 실제 사례로 확인 | ✅ past 강민호 · future 구자욱 · active 가뇽 · 차단 586명 |
+| 사진 | 앱 실행 중 외부 HTTP 요청 0건 | ✅ CSV만 읽음 (수기 > API 우선순위) |
+| 기동 | `streamlit run app/app.py` 무오류 기동 | ✅ 전 모듈 import + 마스터 1,854명 카드 조립 예외 0건 |
+
+### 남은 것
+
+- `data/player_photos_manual.csv`에 사토시·이서준·최상민 3명이 값 없이 등록돼 있다.
+  네이버 API에 사진이 없고 공개 소스를 확인하지 못해 **URL을 비워 뒀다.**
+  채우면 자동 반영되고, 비어 있는 동안은 이름 첫 글자 배지로 표시된다.
+- `src/team_offers.py`·`src/constants.py`는 UI 교체로 앱 참조가 끊겼다.
+  `tests/test_team_offers.py`가 아직 이 모듈을 검증하고 통과하므로 남겨 뒀다.
+- 2023 APBC 국가대표는 위키백과로 못 얻어 `data/national_team_manual.csv`에 손으로 적었다 (TS-010).
 
 ---
 

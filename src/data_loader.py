@@ -90,8 +90,45 @@ def load_search_index():
 
     사진은 선수 이름이 아니라 player_id로 붙인다. 같은 이름이 96쌍 있어
     이름으로 붙이면 다른 사람 얼굴이 나온다.
+
+    우선순위는 수기 > API다. 네이버에 사진이 없는 선수를 손으로 채울 수 있게
+    열어 둔 자리다 (output/reports/missing_photos.csv가 대상 목록).
+    앱은 CSV만 읽는다. 실행 중 외부 호출은 하지 않는다.
     """
-    return _read("player_master.csv"), _read("player_photos.csv")
+    return _read("player_master.csv"), _merge_manual_photos(_read("player_photos.csv"))
+
+
+def _merge_manual_photos(photos: pd.DataFrame) -> pd.DataFrame:
+    """data/player_photos_manual.csv를 API 수집분 위에 덮는다.
+
+    photo_url이 있으면 그대로 쓰고, 없고 photo_file만 있으면 assets/photos/ 아래
+    파일을 가리킨다. 둘 다 비면 그 행은 버린다 — 채울 자리만 적어 둔 것이기 때문이다.
+    """
+    path = DATA / "player_photos_manual.csv"
+    if not path.exists():
+        return photos
+
+    manual = pd.read_csv(path, encoding="utf-8-sig")
+    if manual.empty:
+        return photos
+
+    def source_of(row) -> str | None:
+        url = str(row.get("photo_url") or "").strip()
+        if url and url.lower() != "nan":
+            return url
+        name = str(row.get("photo_file") or "").strip()
+        if name and name.lower() != "nan":
+            return f"assets/photos/{name}"
+        return None
+
+    manual = manual.assign(photo_url=[source_of(row) for _, row in manual.iterrows()])
+    manual = manual.dropna(subset=["photo_url", "player_id"])
+    if manual.empty:
+        return photos
+
+    manual = manual.assign(source="manual")[["player_id", "player_name", "photo_url", "source"]]
+    kept = photos[~photos["player_id"].isin(manual["player_id"])]
+    return pd.concat([kept, manual], ignore_index=True)
 
 
 def _load_bundle(label: str) -> dict:
