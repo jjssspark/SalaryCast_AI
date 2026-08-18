@@ -45,9 +45,9 @@ from src.features import (  # noqa: E402
 MIX_WEIGHT = 0.5
 
 GROUPS = [
-    {"label": "hitter", "korean": "타자", "csv": "hitter_training_v8.csv",
+    {"label": "hitter", "korean": "타자", "csv": "hitter_training_v9.csv",
      "pct_cols": HITTER_PCT_COLS, "group_col": "position", "top_k": None},
-    {"label": "pitcher", "korean": "투수", "csv": "pitcher_training_v8.csv",
+    {"label": "pitcher", "korean": "투수", "csv": "pitcher_training_v9.csv",
      "pct_cols": PITCHER_PCT_COLS, "group_col": "pitcher_role", "top_k": E.TOP_K},
 ]
 
