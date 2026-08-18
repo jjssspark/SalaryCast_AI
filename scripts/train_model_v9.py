@@ -1,4 +1,4 @@
-"""v9 학습 — 인플레이션 보정을 절반 섞고, 투수는 피처를 줄인다.
+"""v9 학습 — 인플레이션 보정을 섞고, 투수는 피처를 줄이고, 타자는 옛 계약을 덜 본다.
 
 v8과 무엇이 다른가:
 
@@ -11,10 +11,17 @@ v8과 무엇이 다른가:
    2022년 입력을 2021년과 똑같이 취급한다. ratio 쪽은 추세를 모델이 아니라
    시장 지표가 담당하므로 이 문제를 피한다. 둘을 섞은 것이 각각보다 나았다.
 
-2. 투수는 폴드 안 선택에서 상위 15개 피처만 남긴 쪽이 나았다.
-   46명에 47피처라 그대로 쓰면 과적합한다.
+   섞는 비율은 그룹마다 다르다(GROUPS 참고). 처음에는 절반씩이었다.
 
-실험 근거는 output/reports/experiment_v9.md에 있다. 채택 기준은 시간 순서 MAE다.
+2. 투수는 폴드 안 선택에서 상위 25개 피처만 남긴다.
+   72명에 47피처라 그대로 쓰면 과적합한다. 타자는 자르면 나빠져서 안 자른다.
+
+3. 타자는 학습 표본에 반감기 3년 가중치를 줘 옛 계약의 비중을 낮춘다.
+   계약을 2014년까지 넓힌 뒤, 옛 계약이 최근 연도 예측을 끌어내리는 게 보였다.
+   투수는 표본이 적어 가중하면 오히려 나빠진다.
+
+실험 근거는 output/reports/의 experiment_v9.md, experiment_topk.md,
+experiment_recency_weight.md에 있다. 채택 기준은 시간 순서 MAE다.
 
 실행: .venv/bin/python scripts/train_model_v9.py
 """
@@ -29,6 +36,7 @@ from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
+from sklearn.pipeline import Pipeline
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -57,10 +65,10 @@ from src.features import (  # noqa: E402
 GROUPS = [
     {"label": "hitter", "korean": "타자", "csv": "hitter_training_v10.csv",
      "pct_cols": HITTER_PCT_COLS, "group_col": "position",
-     "top_k": None, "mix_weight": 0.0},
+     "top_k": None, "mix_weight": 0.0, "half_life": 3},
     {"label": "pitcher", "korean": "투수", "csv": "pitcher_training_v10.csv",
      "pct_cols": PITCHER_PCT_COLS, "group_col": "pitcher_role",
-     "top_k": 25, "mix_weight": 0.75},
+     "top_k": 25, "mix_weight": 0.75, "half_life": None},
 ]
 
 
@@ -82,8 +90,36 @@ def choose(X: pd.DataFrame, y: pd.Series) -> dict:
             "weight": 1.0, "members": [name], "oof": results[name]["pred"]}
 
 
-def _fit_part(spec: dict, X, y_log, level, train_idx, test_idx, part: str) -> np.ndarray:
-    """한 폴드에서 part 하나를 학습해 로그 예측을 낸다. 선택도 폴드 안에서."""
+def recency_weight(half_life, years, reference_year: int) -> np.ndarray | None:
+    """오래된 계약의 비중을 낮추는 표본 가중치. half_life가 없으면 가중하지 않는다.
+
+    타자만 쓴다. 계약을 2014년까지 넓히니 이른 연도 예측은 좋아졌지만 최근 연도는
+    옛 계약에 끌려 나빠졌다(output/reports/experiment_recency_weight.md).
+    투수는 어떤 반감기도 가중 없음보다 나빴다 — 표본이 62명뿐이라 비중을 낮추면
+    쓸 수 있는 정보가 너무 줄어든다.
+    """
+    if not half_life:
+        return None
+    return 0.5 ** ((reference_year - np.asarray(years, dtype=float)) / half_life)
+
+
+def _fit_one(model, X, y, sample_weight):
+    """가중치를 넘겨 적합한다. Ridge는 Pipeline이라 마지막 단계 이름을 붙여야 한다."""
+    if sample_weight is None:
+        return model.fit(X, y)
+    if isinstance(model, Pipeline):
+        step = model.steps[-1][0]
+        return model.fit(X, y, **{f"{step}__sample_weight": sample_weight})
+    return model.fit(X, y, sample_weight=sample_weight)
+
+
+def _fit_part(spec: dict, X, y_log, level, train_idx, test_idx, part: str,
+              sample_weight: np.ndarray | None = None) -> np.ndarray:
+    """한 폴드에서 part 하나를 학습해 로그 예측을 낸다. 선택도 폴드 안에서.
+
+    sample_weight는 최종 적합에만 쓴다. 모델 선택(choose)까지 가중하면 폴드마다
+    뽑히는 모델이 흔들려 가중치 효과만 떼어 보기 어려워진다.
+    """
     columns = [c for c in X.columns if not (part == "ratio" and c == "market_level")]
     target = y_log - np.log1p(level) if part == "ratio" else y_log
     y_tr = target.iloc[train_idx]
@@ -95,7 +131,8 @@ def _fit_part(spec: dict, X, y_log, level, train_idx, test_idx, part: str) -> np
     with contextlib.redirect_stdout(io.StringIO()):
         chosen = choose(X_tr, y_tr)
 
-    fitted = {name: T.make_models()[name].fit(X_tr, y_tr) for name in chosen["members"]}
+    fitted = {name: _fit_one(T.make_models()[name], X_tr, y_tr, sample_weight)
+              for name in chosen["members"]}
     if chosen["blend_second"]:
         w = chosen["weight"]
         pred = (w * fitted[chosen["blend_first"]].predict(X_te)
@@ -121,9 +158,10 @@ def time_metrics_full(spec: dict, X, y_log, level, years) -> dict:
         if len(train_idx) < E.MIN_TRAIN or len(test_idx) == 0:
             continue
         args = (spec, X, y_log, level, train_idx, test_idx)
+        sw = recency_weight(spec["half_life"], years.iloc[train_idx], cutoff)
         weight = spec["mix_weight"]
-        mixed = (weight * _fit_part(*args, "base")
-                 + (1 - weight) * _fit_part(*args, "ratio"))
+        mixed = (weight * _fit_part(*args, "base", sample_weight=sw)
+                 + (1 - weight) * _fit_part(*args, "ratio", sample_weight=sw))
         predicted[test_idx] = np.clip(np.expm1(mixed), 0, None)
 
     seen = ~np.isnan(predicted)
@@ -140,6 +178,11 @@ def train_group(spec: dict) -> dict:
     X, y_log, feature_cols, engineered = T.prepare(df, spec["pct_cols"], spec["group_col"])
     level = E.market_levels(engineered)
     print(f"데이터 {len(df)}명 / 피처 {len(feature_cols)}개")
+
+    years = engineered["fa_year"].astype(int)
+    # 배포 모델은 앞으로의 FA를 예측한다. 기준 연도를 가장 최근 계약 연도로 잡아
+    # 시간 순서 검증의 마지막 폴드와 같은 모양으로 가중한다.
+    final_weight = recency_weight(spec["half_life"], years, int(years.max()))
 
     parts: dict[str, dict] = {}
     members: list[str] = []
@@ -161,8 +204,7 @@ def train_group(spec: dict) -> dict:
         # 'LightGBM' 같은 이름으로 찾기 때문이다.
         prefix = "" if part == "base" else "ratio_"
         for name in chosen["members"]:
-            model = T.make_models()[name]
-            model.fit(X[columns], target)
+            model = _fit_one(T.make_models()[name], X[columns], target, final_weight)
             key = f"{prefix}{name}"
             joblib.dump(model, T.MODEL_DIR / f"{label}_v9_{key.lower()}.pkl")
             members.append(key)
@@ -178,8 +220,7 @@ def train_group(spec: dict) -> dict:
           f"RMSE {random_metrics['rmse']:.2f}억  MAE {random_metrics['mae']:.2f}억")
 
     # 시간 순서 — 실제 용도(미래 FA 예측)에 가까운 숫자
-    time_metrics = time_metrics_full(
-        spec, X, y_log, level, engineered["fa_year"].astype(int))
+    time_metrics = time_metrics_full(spec, X, y_log, level, years)
     print(f"  혼합 시간 순서    R² {time_metrics['r2']:.3f}  "
           f"MAE {time_metrics['mae']:.2f}억  편향 {time_metrics['bias']:+.2f}억"
           f"  (대상 {time_metrics['n']}명)")
@@ -200,6 +241,7 @@ def train_group(spec: dict) -> dict:
         "target": (f"{mix_weight}*log1p(salary) + {1 - mix_weight}*"
                    "(log1p(salary/market_level) + log1p(market_level))"),
         "mix_weight": mix_weight,
+        "half_life": spec["half_life"],
         "parts": parts,
         "n_samples": len(df),
         # 화면의 오차 범위는 시간 순서 MAE를 쓴다. 미래 FA 예측이 실제 용도라
@@ -222,7 +264,8 @@ def main() -> None:
     entries = [train_group(spec) for spec in GROUPS]
 
     lines = ["# v9 모델 학습 결과", "",
-             "v8 대비 바뀐 것: 인플레이션 보정 예측을 절반 섞고, 투수는 피처를 15개로 줄였다.",
+             "인플레이션 보정 예측을 그룹별 비율로 섞고, 투수는 피처를 25개로 줄이고,",
+             "타자는 오래된 계약의 비중을 반감기 3년으로 낮춘다.",
              "화면의 오차 범위(mae_억)는 시간 순서 MAE를 쓴다.", "",
              "| 그룹 | 표본 | 시간 R² | 시간 MAE | 시간 편향 | 무작위 R² | 무작위 MAE |",
              "|---|---|---|---|---|---|---|"]
