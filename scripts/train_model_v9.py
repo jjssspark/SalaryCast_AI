@@ -42,13 +42,25 @@ from src.features import (  # noqa: E402
     build_reference_dist,
 )
 
-MIX_WEIGHT = 0.5
-
+# base와 ratio를 섞는 비율(base 쪽 가중치)과 남길 피처 수. 둘 다 그룹마다 다르다.
+# 계약을 175건으로 늘린 뒤 시간 순서 검증으로 다시 골랐다
+# (scripts/experiment_topk.py, output/reports/experiment_topk.md).
+#
+# 타자는 ratio만 쓰는 게 좋고(mix 0.0) 투수는 base를 3/4 쓰는 게 좋다. 방향이
+# 반대인 이유가 데이터에 있다. ratio는 연봉을 그해 시장 수준으로 나눈 값을
+# 맞히는데, 그 분모는 직전 3년 계약의 중앙값이다. 타자는 연간 계약이 6~15건이라
+# 중앙값이 안정적이지만 투수는 1~9건이고 2022년은 한 건뿐이다. 못 믿을 분모로
+# 나눈 값을 많이 쓰면 안 된다.
+#
+# 피처 수는 투수만 자른다. v9 초기에는 15개였는데 너무 과했다. 25개가 최적이고
+# 그 주변(20~47)이 모두 15개보다 낫다. 타자는 자르면 전 구간에서 나빠진다.
 GROUPS = [
     {"label": "hitter", "korean": "타자", "csv": "hitter_training_v9.csv",
-     "pct_cols": HITTER_PCT_COLS, "group_col": "position", "top_k": None},
+     "pct_cols": HITTER_PCT_COLS, "group_col": "position",
+     "top_k": None, "mix_weight": 0.0},
     {"label": "pitcher", "korean": "투수", "csv": "pitcher_training_v9.csv",
-     "pct_cols": PITCHER_PCT_COLS, "group_col": "pitcher_role", "top_k": E.TOP_K},
+     "pct_cols": PITCHER_PCT_COLS, "group_col": "pitcher_role",
+     "top_k": 25, "mix_weight": 0.75},
 ]
 
 
@@ -109,8 +121,9 @@ def time_metrics_full(spec: dict, X, y_log, level, years) -> dict:
         if len(train_idx) < E.MIN_TRAIN or len(test_idx) == 0:
             continue
         args = (spec, X, y_log, level, train_idx, test_idx)
-        mixed = (MIX_WEIGHT * _fit_part(*args, "base")
-                 + (1 - MIX_WEIGHT) * _fit_part(*args, "ratio"))
+        weight = spec["mix_weight"]
+        mixed = (weight * _fit_part(*args, "base")
+                 + (1 - weight) * _fit_part(*args, "ratio"))
         predicted[test_idx] = np.clip(np.expm1(mixed), 0, None)
 
     seen = ~np.isnan(predicted)
@@ -158,7 +171,8 @@ def train_group(spec: dict) -> dict:
         oof_log[part] = oof + np.log1p(level) if part == "ratio" else oof
         parts[part] = {**chosen, "features": columns, "prefix": prefix}
 
-    mix_oof = MIX_WEIGHT * oof_log["base"] + (1 - MIX_WEIGHT) * oof_log["ratio"]
+    mix_weight = spec["mix_weight"]
+    mix_oof = mix_weight * oof_log["base"] + (1 - mix_weight) * oof_log["ratio"]
     random_metrics = T.score_in_billions(y_log, mix_oof)
     print(f"\n  혼합 무작위 OOF   R² {random_metrics['r2']:.3f}  "
           f"RMSE {random_metrics['rmse']:.2f}억  MAE {random_metrics['mae']:.2f}억")
@@ -173,12 +187,19 @@ def train_group(spec: dict) -> dict:
     reference = build_reference_dist(engineered, spec["pct_cols"], spec["group_col"])
     joblib.dump(reference, T.MODEL_DIR / f"reference_dist_{label}_v9.pkl")
 
+    # 예측을 실제로 끌고 가는 쪽. 화면의 '핵심 요소'는 이 부분의 모델에서 뽑는다.
+    # 타자는 mix_weight가 0이라 base가 예측에 한 푼도 기여하지 않는다. 그 모델로
+    # 근거를 설명하면 예측과 무관한 이야기를 보여주게 된다.
+    explain_part = "base" if mix_weight >= 0.5 else "ratio"
+
     meta = {
-        "features": parts["base"]["features"],  # explain.py가 쓰는 기준 피처
+        "features": parts[explain_part]["features"],  # explain.py가 쓰는 기준 피처
+        "explain_part": explain_part,
         "members": members,
         "target_mode": "mix",
-        "target": "0.5*log1p(salary) + 0.5*(log1p(salary/market_level) + log1p(market_level))",
-        "mix_weight": MIX_WEIGHT,
+        "target": (f"{mix_weight}*log1p(salary) + {1 - mix_weight}*"
+                   "(log1p(salary/market_level) + log1p(market_level))"),
+        "mix_weight": mix_weight,
         "parts": parts,
         "n_samples": len(df),
         # 화면의 오차 범위는 시간 순서 MAE를 쓴다. 미래 FA 예측이 실제 용도라

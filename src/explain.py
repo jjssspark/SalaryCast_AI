@@ -189,9 +189,23 @@ TREE_MODELS = ("LightGBM", "XGBoost", "RandomForest")
 
 
 def _contributions(row: dict, bundle: dict) -> dict[str, float] | None:
-    """피처별 SHAP 기여도. 구할 수 없으면 None."""
+    """피처별 SHAP 기여도. 구할 수 없으면 None.
+
+    v9는 예측을 두 벌(base·ratio) 만들어 섞는데, 섞는 비율이 그룹마다 다르다.
+    타자는 base 쪽 가중치가 0이라 base 모델은 예측에 한 푼도 기여하지 않는다.
+    근거는 예측을 실제로 끌고 가는 쪽에서 뽑아야 한다. meta의 explain_part가
+    그것을 가리킨다.
+
+    ratio 쪽에서 뽑으면 SHAP 값은 '연봉'이 아니라 '시장 수준 대비 비율'을
+    올리고 내린 정도다. 화면은 순위와 방향만 쓰므로 읽는 데 문제는 없다.
+    """
+    meta = bundle["meta"]
+    part = meta.get("parts", {}).get(meta.get("explain_part", "base"), {})
+    prefix = part.get("prefix", "")
+
     model = next(
-        (bundle["models"][name] for name in TREE_MODELS if name in bundle["models"]),
+        (bundle["models"][f"{prefix}{name}"]
+         for name in TREE_MODELS if f"{prefix}{name}" in bundle["models"]),
         None,
     )
     if model is None:
@@ -202,7 +216,7 @@ def _contributions(row: dict, bundle: dict) -> dict[str, float] | None:
     except ImportError:
         return None
 
-    features = bundle["meta"]["features"]
+    features = meta["features"]
     frame = to_frame(row, features).astype(float)
 
     try:

@@ -48,8 +48,11 @@ def time_predictions(spec: dict, df: pd.DataFrame, train_from: int) -> np.ndarra
         if len(train_idx) < E.MIN_TRAIN or len(test_idx) == 0:
             continue
         args = (spec, X, y_log, level, train_idx, test_idx)
-        mixed = (V9.MIX_WEIGHT * V9._fit_part(*args, "base")
-                 + (1 - V9.MIX_WEIGHT) * V9._fit_part(*args, "ratio"))
+        # 이 실험을 돌릴 당시 v9가 쓰던 값. 여기서 재는 것은 학습 표본을 넓힌
+        # 효과이므로 섞는 비율은 고정해야 한다. 뒤에 그룹별로 다시 골랐지만
+        # (experiment_topk.py) 이 리포트를 그대로 재현하려면 0.5여야 한다.
+        mixed = (0.5 * V9._fit_part(*args, "base")
+                 + 0.5 * V9._fit_part(*args, "ratio"))
         predicted[test_idx] = np.clip(np.expm1(mixed), 0, None)
     return predicted
 
