@@ -9,6 +9,9 @@
               계약 기간에는 시장에 나오지 않으므로 구단별 제시가를 내지 않는다.
   future    — 앞으로 FA가 예정된 선수. 예상 연봉과 구단별 제시가를 낸다.
   active    — 셋 다 아닌 현역. FA가 온다면 얼마일지를 참고값으로 낸다.
+
+future 중에는 조사한 명단(42명)이 아니라 데뷔 연도로 자격 연도를 추정한 경우가
+있다. card.fa_year_estimated가 그것을 구분하고, 칩과 부제에 '추정'을 붙인다.
 표본이 모자라면 숫자를 내지 않고 왜 못 내는지 적는다.
 
 R²·RMSE·모델 이름 같은 말은 화면에 쓰지 않는다.
@@ -117,7 +120,11 @@ def _left_pane(context: Context, card) -> str:
     if card.mode in SIGNED_MODES:
         return ui.versus_panel(card, verdict(card), reference)
 
-    if card.mode == "active":
+    if card.fa_year_estimated:
+        # 조사한 FA 예정 명단에 없는 선수다. 연도가 확정값이 아니라는 것을
+        # 화면에 그대로 적는다.
+        subtitle = f"{card.fa_year}년 FA 자격 추정 · 연평균 · 억 원"
+    elif card.mode == "active":
         subtitle = f"{card.fa_year}년에 FA가 온다고 가정 · 연평균 · 억 원"
     else:
         subtitle = f"{card.fa_year}년 FA 기준 · 연평균 · 억 원"

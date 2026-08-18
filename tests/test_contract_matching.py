@@ -1,11 +1,12 @@
 """FA 계약을 붙일 때 동명이인의 계약이 딸려오지 않는가.
 
 투수 김현수의 카드에 타자 김현수의 16.67억 계약이 붙어 "고평가 계약"으로 표시된 적이
-있다. resolve_player_id는 타자와 투수로 갈린 시즌 테이블 안에서 동명이인을 가리는데,
-그 안에서 이름이 유일해지면 소속팀을 대조하기 전에 반환하기 때문이었다.
+있다. 이름으로 계약을 찾았기 때문이다. 지금은 fa_contracts_v6.csv에 player_id가
+박혀 있어 그것으로만 맞춘다. 이 테스트는 그 player_id가 실제로 맞게 들어갔는지를
+확인한다.
 
-_past_contract가 쓰는 것은 fa·master·시즌 테이블 넷뿐이라 SimpleNamespace로 세운다.
-Context 전체를 만들면 모델까지 로드해야 해서 테스트가 무거워진다.
+_past_contract가 쓰는 것은 fa 테이블 하나지만, 유형 대조를 위해 master도 읽는다.
+Context 전체를 만들면 모델까지 로드해야 해서 SimpleNamespace로 세운다.
 """
 
 from pathlib import Path
@@ -19,7 +20,7 @@ from src.serving import _past_contract
 DATA = Path("data")
 
 SOURCES = {
-    "fa": "fa_contracts_v4.csv",
+    "fa": "fa_contracts_v6.csv",
     "master": "player_master.csv",
     "hitter_seasons": "hitter_season_stats_2013_2026_v3.csv",
     "pitcher_seasons": "pitcher_season_stats_2013_2026_v3.csv",
@@ -49,9 +50,9 @@ def test_pitcher_does_not_inherit_the_hitters_contract(context):
     ids = _ids(context, "김현수")
     assert "pitcher" in ids and "hitter" in ids, "김현수 동명이인 표본이 사라졌다"
 
-    assert _past_contract(context, ids["pitcher"], "김현수") is None
+    assert _past_contract(context, ids["pitcher"]) is None
 
-    signed = _past_contract(context, ids["hitter"], "김현수")
+    signed = _past_contract(context, ids["hitter"])
     assert signed is not None, "실제 계약 당사자가 계약을 못 찾았다"
     assert signed["position"] != "P"
 
@@ -65,9 +66,9 @@ def test_hitter_does_not_inherit_the_pitchers_contract(context):
     ids = _ids(context, "최원준")
     assert "pitcher" in ids and "hitter" in ids, "최원준 동명이인 표본이 사라졌다"
 
-    assert _past_contract(context, ids["hitter"], "최원준") is None
+    assert _past_contract(context, ids["hitter"]) is None
 
-    signed = _past_contract(context, ids["pitcher"], "최원준")
+    signed = _past_contract(context, ids["pitcher"])
     assert signed is not None, "실제 계약 당사자가 계약을 못 찾았다"
     assert signed["position"] == "P"
 
@@ -80,7 +81,7 @@ def test_every_matched_contract_agrees_with_the_player_type(context):
     for row in context.master.itertuples():
         if row.player_name not in signed_names:
             continue
-        contract = _past_contract(context, int(row.player_id), row.player_name)
+        contract = _past_contract(context, int(row.player_id))
         if contract is None:
             continue
         if (contract["position"] == "P") != (str(row.player_type) == "pitcher"):

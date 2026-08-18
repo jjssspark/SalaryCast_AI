@@ -22,7 +22,6 @@ from src.features import (
     format_seasons_used,
     market_level_prior,
     resolve_age_at,
-    resolve_player_id,
     select_recent_seasons,
     star_counts,
 )
@@ -52,6 +51,7 @@ class Context:
     awards: pd.DataFrame
     fa: pd.DataFrame
     future: pd.DataFrame
+    eligibility: pd.DataFrame
     extensions: pd.DataFrame
     birth: dict
     teams: pd.DataFrame
@@ -72,6 +72,7 @@ class Card:
     team: str
     is_hitter: bool
     mode: str                 # past | extension | future | active
+    fa_year_estimated: bool   # fa_year가 조사값이 아니라 규칙 추정일 때 True
     position_code: str | None
     position_label: str
     role: str | None
@@ -142,33 +143,17 @@ def _is_hitter(context: Context, player_id: int) -> bool:
     return bool(len(row)) and str(row.iloc[0]["player_type"]) == "hitter"
 
 
-def _past_contract(context: Context, player_id: int, name: str) -> pd.Series | None:
+def _past_contract(context: Context, player_id: int) -> pd.Series | None:
     """이 선수가 실제로 맺은 FA 계약 중 가장 최근 건.
 
-    FA 계약 파일에는 player_id가 없어 이름으로 찾는데, 같은 이름이 96쌍 있다.
-    학습 때 쓴 것과 같은 방식으로 실제 당사자인지 확인한다.
-
-    유형(타자/투수)을 먼저 거른다. resolve_player_id는 타자와 투수로 갈린 시즌
-    테이블 안에서 동명이인을 가리는데, 그 안에서 이름이 유일해지면 소속팀을
-    대조하기 전에 그대로 반환한다. 그래서 투수 김현수에게 타자 김현수의 계약이,
-    타자 최원준에게 투수 최원준의 계약이 붙었다.
+    계약 파일(fa_contracts_v6.csv)에 player_id가 박혀 있어 그대로 맞춘다.
+    예전에는 이름으로 찾고 출전 경기 수·소속팀으로 동명이인을 갈랐는데,
+    같은 이름이 61쌍이라 시즌 기록이 한 줄만 바뀌어도 다른 사람의 계약이
+    붙을 수 있었다. 확정한 값을 파일에 적어두는 쪽으로 옮겼다
+    (scripts/add_player_ids.py).
     """
-    is_hitter = _is_hitter(context, player_id)
-    same_name = context.fa[
-        (context.fa["player_name"] == name)
-        & ((context.fa["position"] == "P") != is_hitter)
-    ]
-    if same_name.empty:
-        return None
-
-    seasons = _seasons_of(context, is_hitter)
-    for _, contract in same_name.sort_values("fa_year", ascending=False).iterrows():
-        resolved = resolve_player_id(
-            seasons, name, contract["team"], int(contract["fa_year"])
-        )
-        if resolved == player_id:
-            return contract
-    return None
+    same = context.fa[context.fa["player_id"] == player_id]
+    return None if same.empty else same.sort_values("fa_year").iloc[-1]
 
 
 def _extension_of(context: Context, name: str, master_row: pd.Series) -> pd.Series | None:
@@ -199,12 +184,14 @@ def build_card(context: Context, player_id: int) -> Card:
     if player_seasons.empty:
         raise NotEnoughRecord("최근 기록이 없습니다.")
 
-    future_row = context.future[context.future["player_name"] == name]
-    contract = _past_contract(context, player_id, name)
+    future_row = context.future[context.future["player_id"] == player_id]
+    estimated_row = context.eligibility[context.eligibility["player_id"] == player_id]
+    contract = _past_contract(context, player_id)
     extension = _extension_of(context, name, master_row)
 
     # 비FA 다년계약을 맺은 선수는 그 기간 동안 FA 시장에 나오지 않는다.
     # 다음 FA가 얼마일지를 묻는 것 자체가 틀린 질문이라 가장 먼저 걸러낸다.
+    fa_year_estimated = False
     if extension is not None:
         mode = "extension"
         fa_year = int(str(extension["sign_date"])[:4])
@@ -222,6 +209,15 @@ def build_card(context: Context, player_id: int) -> Card:
         fa_year = int(contract["fa_year"])
         base_year = fa_year - 1
         actual = float(contract["annual_avg_salary"])
+    # 조사한 목록에 없는 현역은 데뷔 연도와 뛴 시즌 수로 자격 연도를 추정한다.
+    # 추정임을 카드에 달아 보내고, 화면이 그대로 표시한다
+    # (scripts/estimate_fa_eligibility.py).
+    elif not estimated_row.empty:
+        mode = "future"
+        fa_year_estimated = True
+        fa_year = int(estimated_row.iloc[0]["fa_year_expected"])
+        base_year = int(player_seasons["collect_year"].max())
+        actual = None
     else:
         mode = "active"
         base_year = int(player_seasons["collect_year"].max())
@@ -267,6 +263,7 @@ def build_card(context: Context, player_id: int) -> Card:
         team=str(master_row.get("team_latest") or "무소속"),
         is_hitter=is_hitter,
         mode=mode,
+        fa_year_estimated=fa_year_estimated,
         position_code=position_code if is_hitter else None,
         position_label=(
             CODE_TO_KOREAN.get(position_code, position_code)

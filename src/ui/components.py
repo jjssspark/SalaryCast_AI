@@ -55,6 +55,10 @@ MODE_CHIP = {
     "active": ("", "{year} 기준 예상"),
 }
 
+# 조사한 FA 예정 명단(42명)에 없어 데뷔 연도로 자격 연도를 추정한 경우.
+# 확정된 연도처럼 보이면 안 되므로 칩 문구부터 다르게 간다.
+ESTIMATED_CHIP = ("", "{year} FA 예상(추정)")
+
 
 def _pct(value: float) -> str:
     """0~1을 CSS 폭으로. 0%면 막대가 안 보여서 최소 폭을 준다."""
@@ -225,7 +229,10 @@ def search_results(rows: list[dict]) -> str:
 # --------------------------------------------------------------------------
 
 def player_hero(card) -> str:
-    chip_class, chip_text = MODE_CHIP[card.mode]
+    if card.fa_year_estimated:
+        chip_class, chip_text = ESTIMATED_CHIP
+    else:
+        chip_class, chip_text = MODE_CHIP[card.mode]
 
     if card.photo_url:
         photo = f'<img src="{escape(str(card.photo_url))}" alt="{escape(card.name)}"/>'

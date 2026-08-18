@@ -39,7 +39,7 @@ from src.ui.styles import CSS  # noqa: E402
 
 @st.cache_resource(show_spinner=False)
 def build_context() -> Context:
-    teams, position_need, future, fa = load_data()
+    teams, position_need, future, fa, eligibility = load_data()
     hitter_seasons, pitcher_seasons = load_season_stats()
     master, photos = load_search_index()
     hitter_bundle, pitcher_bundle = load_models()
@@ -60,6 +60,7 @@ def build_context() -> Context:
         awards=load_awards(),
         fa=fa,
         future=future,
+        eligibility=eligibility,
         extensions=load_extensions(),
         birth=load_birth_lookup(),
         teams=teams,

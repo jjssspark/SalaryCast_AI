@@ -4,7 +4,7 @@
 데이터 파일: data/*.csv, models/*.pkl. 모두 utf-8-sig 인코딩.
 
 이전 구현에서 고친 것:
-1. data/future_fa_candidates.csv(42명, 실제 조사 결과)를 읽지 않고
+1. data/future_fa_candidates_v2.csv(42명, 실제 조사 결과)를 읽지 않고
    '데뷔 연도 + 10년'으로 후보를 추정한 뒤 포지션을 전원 "외야수",
    FA 등급을 전원 "B"로 하드코딩했다. 이제 그 파일을 그대로 쓴다.
 2. 시즌 스탯이 상위 100여 명만 담긴 v2였다. 전 선수가 담긴 v3로 바꿨다.
@@ -37,6 +37,12 @@ def _read(name: str) -> pd.DataFrame:
 def load_data():
     """구단·FA 계약 등 화면이 참고하는 기준 데이터.
 
+    FA 계약과 FA 예정 목록에는 player_id가 박혀 있다. 이름으로 붙이면 같은
+    이름 61쌍이 서로의 계약을 가져간다 (scripts/add_player_ids.py).
+
+    fa_eligibility_estimated.csv는 조사값이 아니라 규칙으로 뽑은 추정 자격
+    연도다. 조사한 42명과 섞지 않으려고 파일을 나눠 둔다.
+
     학습 테이블(*_training_v8.csv)은 여기서 읽지 않는다. 화면은 학습 표본이
     아니라 시즌 스탯에서 그때그때 입력을 만들어 쓴다. 학습 표본 안에서의
     상대 위치가 필요한 곳은 모델과 함께 저장해 둔 reference_dist_*.pkl을 쓴다.
@@ -44,8 +50,9 @@ def load_data():
     return (
         _read("teams.csv"),
         _read("position_need.csv"),
-        _read("future_fa_candidates.csv"),
-        _read("fa_contracts_v4.csv"),
+        _read("future_fa_candidates_v2.csv"),
+        _read("fa_contracts_v6.csv"),
+        _read("fa_eligibility_estimated.csv"),
     )
 
 
@@ -73,7 +80,7 @@ def load_extensions() -> pd.DataFrame:
     """비FA 다년계약. FA 계약과 섞지 않는다.
 
     FA를 거치지 않고 구단과 장기 계약을 맺은 선수는 계약 기간 동안 시장에 나오지
-    않는다. fa_contracts_v4.csv에 넣으면 FA가 아닌 계약이 학습 정답에 섞이므로
+    않는다. fa_contracts_v6.csv에 넣으면 FA가 아닌 계약이 학습 정답에 섞이므로
     파일을 따로 둔다. 화면에서만 쓴다.
     """
     path = DATA / "non_fa_extensions.csv"
