@@ -1,33 +1,52 @@
 # 데이터 구조
 
-## 정식 사용 파일 (canonical)
+## 앱과 학습이 실제로 읽는 파일
 
 | 파일 | 용도 | 생성 스크립트 |
 |------|------|---------------|
-| `hitter_training_v5.csv`, `pitcher_training_v5.csv` | 모델 학습 입력 (스타성 피처 포함) | `scripts/make_star_features.py` |
-| `hitter_training_v7.csv`, `pitcher_training_v7.csv` | Streamlit 앱 표시/추론용 (v5 + 추가 파생 컬럼, 피처 일부는 앱에서 재계산) | 수동 보강 (재현 스크립트 소실, 아래 "알려진 한계" 참고) |
-| `hitter_season_stats_2015_2026_v2.csv`, `pitcher_season_stats_2015_2026_v2.csv` | 연도별 시즌 스탯 (앱의 미래 FA 예측·상세 스탯 탭에 사용) | 원본 생성 스크립트 소실 (아래 참고) |
-| `fa_contracts_v3.csv` | FA 계약 실적 (Y값, 140건) | 수집 노트북 (`notebooks/`) |
-| `star_features_hitter.csv`, `star_features_pitcher.csv` | MVP·골든글러브·국가대표 등 스타성 원천 데이터 | `scripts/make_star_features.py` |
+| `fa_contracts_v6.csv` | FA 계약 실적 (Y값, 175건 · 2016~2026) | `scripts/add_player_ids.py` → `scripts/add_fa_2016_2017.py` |
+| `future_fa_candidates_v2.csv` | 조사해서 확인한 FA 예정 선수 42명 | 수동 조사 + `scripts/add_player_ids.py` (player_id 부여) |
+| `fa_eligibility_estimated.csv` | 위 목록에 없는 현역의 FA 자격 연도 추정값 | `scripts/estimate_fa_eligibility.py` |
+| `non_fa_extensions.csv` | 비FA 다년계약. FA 계약과 섞지 않는다 | 수동 조사 |
+| `hitter_season_stats_2013_2026_v3.csv`, `pitcher_season_stats_2013_2026_v3.csv` | 연도별 시즌 스탯 | `scripts/build_season_stats_v3.py` |
+| `player_master.csv` | 선수 마스터 (검색·유형·소속) | `scripts/build_season_stats_v3.py` |
+| `player_photos.csv`, `player_photos_manual.csv` | 선수 사진. 수기가 API 위에 덮인다 | `scripts/build_season_stats_v3.py` / 수동 |
+| `player_birth_manual.csv` | 생년. 나이 피처의 근거 | `scripts/collect_player_birth.py`, `scripts/collect_birth_fa_2016_2017.py` |
+| `star_features_v2.csv` | MVP·골든글러브·국가대표 연도별 수상 | `scripts/collect_star_features.py` |
+| `hitter_training_v9.csv`, `pitcher_training_v9.csv` | 모델 학습 입력 (타자 113명 / 투수 60명) | `scripts/build_training_v8.py` |
 | `teams.csv`, `position_need.csv` | 구단별 제시가 보정용 메타데이터 | 수동 작성 |
-| `future_fa_candidates.csv` | 27~30년 FA 예정 선수 목록 | 앱 실행 시 `get_future_fa_candidates()`로 동적 생성(캐시) |
-| `naver_hitter_2013_2026_raw_all.csv`, `naver_pitcher_2013_2026_raw_all.csv` | 네이버 스포츠 API 원천 수집 데이터 (가장 넓은 범위) | `scripts/crawl_extend.py` |
+| `naver_hitter_2013_2026_raw_v2.csv`, `naver_pitcher_2013_2026_raw_v2.csv` | 네이버 스포츠 API 원천 수집 | `scripts/crawl_naver_v2.py` |
 
-## 모델이 실제로 쓰는 피처
+## 조사값과 추정값을 파일로 나눠 둔 이유
 
-`models/*_model_meta.pkl`의 `features` 리스트 기준으로, 학습에 실제 사용되는 피처는 v5 원본 컬럼 + `app/app.py`의
-`engineer_hitter_features()` / `engineer_pitcher_features()`가 로드 시점에 계산하는 파생 피처(`market_level`,
-`age_squared`, `prime_years_left`, `star_x_war`, `war_sum_sq`, 포지션 백분위 등)다.
-v7에 있는 `war_trend`, `ops_trend`, `woba_trend`, `war_std`, `ops_std`, `war_peak`, `ops_peak`, `hr_peak`, `ops_sq`, `is_prime`
-컬럼은 실험 단계에서 추가됐으나 현재 모델 피처 리스트에는 포함되지 않는 미사용 컬럼이다.
+`future_fa_candidates_v2.csv`는 실제로 확인한 42명이고, `fa_eligibility_estimated.csv`는
+데뷔 연도와 뛴 시즌 수로 계산한 추정값이다. 한 파일에 섞으면 어느 쪽이 사실인지
+구분할 수 없어진다. 화면도 추정값으로 만든 카드에는 "FA 예상(추정)"을 붙인다.
+
+추정 규칙과 그 근거는 `scripts/estimate_fa_eligibility.py` 도크스트링에 있다.
+
+## player_id를 파일에 박아 둔 이유
+
+KBO에는 같은 이름이 많다. 마스터에 박건우가 4명, 김민수가 3명이다. 이름으로 붙이면
+롯데 박건우가 "NC 외야수 · 2028년 FA 예정" 카드를 받는다. 실제로 그랬다 (TS-012).
+
+계약과 FA 예정 목록에는 `player_id` 컬럼이 있고 코드는 그 값으로만 맞춘다.
+한 건(투수 김상수 2021 SK)만 비어 있는데, 네이버 크롤 원본에 그 선수가 없다.
+
+## 버전 접미사
+
+같은 이름으로 덮어쓰지 않는다. 앞선 버전은 그때 발행한 리포트가 그대로 재현되도록
+남긴다. `hitter_training_v9`는 피처가 바뀌어서가 아니라 입력 계약이 140건에서
+175건으로 늘어서 붙은 번호다. 피처 구성은 v8과 같다.
 
 ## data/archive/
 
-과거 버전(v2~v4, v6)과 후속 파일로 대체된 원천 데이터(`_2013_2016`, `_2015_2026` 원본, non-v2 시즌 스탯)를 보관.
-재현성 참고용으로만 남기고 신규 코드에서 참조하지 않는다.
+후속 파일로 대체된 과거 버전을 보관한다. 재현성 참고용으로만 남기고 신규 코드에서
+참조하지 않는다.
 
-## 알려진 한계 (재현성 갭)
+## 알려진 한계
 
-- `hitter_training_v5.csv → v7.csv`, `naver_*_raw_all.csv → *_season_stats_*_v2.csv` 변환 스크립트는
-  원 저장소에 보존되어 있지 않다. 원본 데이터를 처음부터 다시 수집·가공해야 하는 경우 해당 변환 로직을
-  새로 작성해야 한다. (Day2 이후 데이터 파이프라인 스크립트화 권장)
+- `hitter_training_v5 → v7` 변환 스크립트는 저장소에 없다. v8 이후 파이프라인
+  (`build_season_stats_v3.py` → `build_training_v8.py`)으로 대체됐으므로 v5·v7은
+  더 이상 쓰지 않는다.
+- 마스터의 포지션은 1854명 중 423명만 네이버가 준 값이고 나머지는 추정이다.
