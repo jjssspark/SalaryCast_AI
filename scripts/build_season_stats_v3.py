@@ -275,7 +275,7 @@ def build_master(hitters: pd.DataFrame, pitchers: pd.DataFrame) -> pd.DataFrame:
         return valid.iloc[-1] if len(valid) else None
 
     parts = []
-    for df, ptype in [(hitters, "hitter"), (pitchers, "pitcher")]:
+    for df, ptype, volume_col in [(hitters, "hitter", "ab"), (pitchers, "pitcher", "innings")]:
         agg = (
             df.sort_values("collect_year")
             .groupby("player_id")
@@ -286,16 +286,38 @@ def build_master(hitters: pd.DataFrame, pitchers: pd.DataFrame) -> pd.DataFrame:
                 first_year=("collect_year", "min"),
                 latest_year=("collect_year", "max"),
                 season_count=("collect_year", "nunique"),
+                volume=(volume_col, "sum"),
             )
             .reset_index()
         )
         agg["player_type"] = ptype
         parts.append(agg)
 
-    # 같은 선수가 타자·투수 양쪽에 잡히면 기록이 많은 쪽을 그 선수의 유형으로 본다.
+    # 같은 선수가 타자·투수 양쪽에 잡히면 실제로 더 많이 뛴 쪽을 그 선수의 유형으로
+    # 본다. 예전에는 시즌 수로 갈랐는데, 투수도 타석에 서면 타자 테이블에 같은 시즌
+    # 수로 잡혀 동점이 됐다. 동점이면 정렬 순서대로 타자가 이겨서 손승락·박영현·
+    # 김서현 같은 투수 67명이 타자로 분류됐고, 화면에서 타자 모델로 예측됐다.
+    #
+    # 타수와 이닝은 단위가 다르지만 섞일 일이 없다. 진짜 투수는 타수가 0에 가깝고
+    # (지명타자제) 야수가 등판해도 한두 이닝이다.
     merged = pd.concat(parts, ignore_index=True)
+
+    # 네이버가 포지션을 알려준 선수는 그 값이 출전량보다 낫다. 투수로 전향했거나
+    # 야수로 전향한 선수는 양쪽 기록이 다 적어서 출전량만으로는 뒤집힌다.
+    # 김성민(SK 14타수 / SSG 0.7이닝)이 그런 경우다.
+    naver = merged.dropna(subset=["position"])
+    declared = (
+        naver[naver["position"].isin(["투수", "야수", "내야수", "외야수", "포수", "유격수"])]
+        .assign(declared=lambda d: d["position"].eq("투수").map({True: "pitcher", False: "hitter"}))
+        .drop_duplicates("player_id")
+        .set_index("player_id")["declared"]
+    )
+    merged["declared"] = merged["player_id"].map(declared)
+    merged["type_match"] = merged["declared"].isna() | merged["declared"].eq(merged["player_type"])
+
     merged = merged.sort_values(
-        ["player_id", "season_count", "latest_year"], ascending=[True, False, False]
+        ["player_id", "type_match", "volume", "season_count", "latest_year"],
+        ascending=[True, False, False, False, False],
     ).drop_duplicates("player_id")
 
     # 네이버 profile의 position은 절반 가까이 비어 있다. 대체 엔드포인트는 403이라
