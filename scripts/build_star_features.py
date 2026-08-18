@@ -109,7 +109,7 @@ def main() -> None:
     print(pd.Series([d[2] for d in dropped]).value_counts().to_string())
 
     # 미래 FA 후보가 실제로 채워졌는지 본다. 이게 이번 작업의 목적이다.
-    future = pd.read_csv(DATA_DIR / "future_fa_candidates.csv")
+    future = pd.read_csv(DATA_DIR / "future_fa_candidates_v2.csv")
     counts = table.groupby(["player_name", "award"]).size().unstack(fill_value=0)
 
     print("\n미래 FA 후보 42명 수상 이력")

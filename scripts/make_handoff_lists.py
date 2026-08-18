@@ -71,8 +71,8 @@ def main() -> None:
 
     master = pd.read_csv(DATA_DIR / "player_master.csv")
     photos = pd.read_csv(DATA_DIR / "player_photos.csv")
-    fa = pd.read_csv(DATA_DIR / "fa_contracts_v4.csv")
-    future = pd.read_csv(DATA_DIR / "future_fa_candidates.csv")
+    fa = pd.read_csv(DATA_DIR / "fa_contracts_v6.csv")
+    future = pd.read_csv(DATA_DIR / "future_fa_candidates_v2.csv")
 
     seasons = pd.concat([
         pd.read_csv(DATA_DIR / "hitter_season_stats_2013_2026_v3.csv"),
