@@ -250,11 +250,15 @@ pytest tests/ -v
 notebooks/01_data_check.ipynb      — 수집 커버리지·결측·타깃 분포 확인
 notebooks/02_preprocessing.ipynb   — 생년 교정, 3년 집계, 인코딩, 백분위, 누수 제거
 notebooks/03_eda.ipynb             — 로그 변환·나이 곡선 등 모델 설계 근거
-notebooks/04_model_train.ipynb     — 모델 7종 비교 → 블렌딩 → 평가·저장
+notebooks/04_model_train.ipynb     — 모델 7종 비교 → 블렌딩 → 서비스 모델(v9)과의 차이
 ```
 
-노트북은 `scripts/gen_notebooks_v8.py`가 만든다. 직접 편집하지 않고 생성 스크립트를 고친다.
-04는 v8 성능 표(타자 0.618 / 투수 0.645)를 그대로 재현한다. 배포 모델은 v9다.
+노트북은 `scripts/gen_notebooks.py`가 만든다. 직접 편집하지 않고 생성 스크립트를 고친다.
+학습셋은 v10, 계약은 210건 기준이다.
+
+04는 수업에서 배운 기법으로 기본형을 만들어 무작위 K-fold로 재고, 마지막에 배포
+모델(v9)이 여기서 무엇을 더했는지와 시간 순서 성능을 `models/*_v9_meta.pkl`에서
+읽어 보여준다. 두 수치는 채점 방식이 달라 직접 비교하면 안 된다.
 데이터 수집·학습 파이프라인 자체는 `scripts/`가 담당하고, 노트북은 **읽기 전용**이다
 (운영 모델 `models/*.pkl`을 덮어쓰지 않는다).
 

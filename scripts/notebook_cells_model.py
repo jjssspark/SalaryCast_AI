@@ -1,6 +1,6 @@
 """03·04 노트북 셀 내용 — EDA와 모델 학습.
 
-셀 본문이 길어 gen_notebooks_v8.py에서 떼어냈다. 한 파일 800줄 규약을 넘겼다.
+셀 본문이 길어 gen_notebooks.py에서 떼어냈다. 한 파일 800줄 규약을 넘겼다.
 """
 
 from __future__ import annotations
@@ -22,8 +22,8 @@ def notebook_03() -> list[dict]:
     C.append(md("## 0. 환경 설정"))
     C.append(code(SETUP))
     C.append(code("""
-hitters = pd.read_csv(DATA / "hitter_training_v8.csv")
-pitchers = pd.read_csv(DATA / "pitcher_training_v8.csv")
+hitters = pd.read_csv(DATA / "hitter_training_v10.csv")
+pitchers = pd.read_csv(DATA / "pitcher_training_v10.csv")
 print(f"타자 {len(hitters)}명 · 투수 {len(pitchers)}명")
 """))
 
@@ -181,7 +181,7 @@ def notebook_04() -> list[dict]:
 
 02에서 만든 피처로 연평균 계약금을 예측한다.
 
-**평가 방법**: 표본이 타자 93명·투수 46명뿐이라 train/test를 한 번 나누면
+**평가 방법**: 표본이 타자 136명·투수 72명뿐이라 train/test를 한 번 나누면
 어떻게 쪼개느냐에 따라 점수가 크게 흔들린다.
 그래서 **5-fold 교차검증을 5회 반복한 OOF(Out-of-Fold) 예측**으로 평가한다.
 모든 선수가 '학습에 안 쓰인 상태'로 예측된다.
@@ -228,8 +228,8 @@ def prepare(csv_name, pct_cols, group_col):
             if c not in EXCLUDED and pd.api.types.is_numeric_dtype(engineered[c])]
     return engineered[cols].astype(float), y, cols, engineered
 
-X_h, y_h, cols_h, eng_h = prepare("hitter_training_v8.csv", HITTER_PCT_COLS, "position")
-X_p, y_p, cols_p, eng_p = prepare("pitcher_training_v8.csv", PITCHER_PCT_COLS, "pitcher_role")
+X_h, y_h, cols_h, eng_h = prepare("hitter_training_v10.csv", HITTER_PCT_COLS, "position")
+X_p, y_p, cols_p, eng_p = prepare("pitcher_training_v10.csv", PITCHER_PCT_COLS, "pitcher_role")
 
 print(f"타자 X {X_h.shape} / 투수 X {X_p.shape}")
 """))
@@ -328,9 +328,10 @@ def evaluate_all(X, y, label):
 단순한 모델(KNN·DecisionTree)과 앙상블의 차이를 눈으로 본다.
 
 **규제 없는 최소제곱(LinearRegression)은 투수에서 무너진다.**
-투수는 표본 46명에 피처가 47개다. 미지수가 방정식보다 많으니 계수가 발산하고,
-학습에 안 쓰인 선수에서 예측이 터무니없이 나온다. R²가 음수라는 것은
-**그냥 평균값을 답하는 것보다 못하다**는 뜻이다.
+투수는 72명에 피처가 47개인데, 5-fold라 한 번 학습에 쓰는 건 58명뿐이다.
+피처 수와 거의 같다. 게다가 원래 스탯과 그 백분위처럼 서로 강하게 겹치는
+피처가 많아서 계수가 발산하고, 학습에 안 쓰인 선수에서 예측이 터무니없이 나온다.
+R²가 음수라는 것은 **그냥 평균값을 답하는 것보다 못하다**는 뜻이다.
 같은 선형 모델이라도 Ridge는 계수 크기에 벌점을 줘서 이걸 막는다.
 왜 규제가 필요한지 보여주는 자리라 값을 지우지 않고 그대로 둔다.
 """))
@@ -453,7 +454,7 @@ plt.show()
 **어떤 피처를 어떤 순서로 넣어야 하는지**도 같이 저장해야 재현된다.
 
 > 이 노트북은 `output/notebook_models/`에 저장한다.
-> 서비스가 실제로 쓰는 `models/*.pkl`은 `scripts/train_model_v8.py`가 만든다.
+> 서비스가 실제로 쓰는 `models/*.pkl`은 `scripts/train_model_v9.py`가 만든다.
 > 노트북 실행이 운영 모델을 덮어쓰지 않게 분리해 둔다.
 """))
     C.append(code("""
@@ -486,7 +487,55 @@ print(f"\\n{eng_h.iloc[0]['player_name']} "
 """))
 
     C.append(md("""
-## 11. 2차 보정 — 구단별 제시가
+## 11. 서비스가 쓰는 모델은 여기서 세 가지가 더 붙는다
+
+여기까지가 수업에서 배운 기법으로 만든 기본형이다.
+배포된 모델(`scripts/train_model_v9.py`)은 여기에 세 가지를 더 얹었다.
+전부 시간 순서 검증으로 이득을 확인하고 넣은 것이다.
+
+1. **인플레이션 보정** — 연봉을 그대로 맞히는 예측(base)과, 그해 시장 수준 대비
+   비율을 맞히는 예측(ratio)을 로그 공간에서 섞는다. 트리 모델은 `fa_year`를
+   외삽하지 못해서 학습 마지막 해 이후를 전부 낮게 부른다. ratio 쪽은 추세를
+   모델이 아니라 시장 지표가 맡으므로 이 문제를 피한다.
+2. **투수만 피처 축소** — 폴드 안에서 상관 상위 25개만 남긴다. 타자는 자르면 나빠진다.
+3. **타자만 최근 계약 가중** — 반감기 3년으로 옛 계약의 비중을 낮춘다.
+   3년 전 계약은 절반, 6년 전은 1/4로 센다. 투수는 표본이 적어 가중하면 나빠진다.
+
+### 채점 방식이 다르다
+
+위 표들은 무작위 K-fold다. 2018년 계약을 예측할 때 2026년 계약을 이미 본 상태다.
+서비스가 하는 일은 **미래 FA 예측**이라, 과거로만 학습해 앞을 맞히는
+**시간 순서 검증**이 실제 성능에 가깝다. 화면에 쓰는 오차 범위도 이 값이다.
+
+아래 표는 학습해 둔 번들에 기록된 값을 그대로 읽은 것이다.
+"""))
+    C.append(code("""
+rows, bundles = [], {}
+for label, korean in [("hitter", "타자"), ("pitcher", "투수")]:
+    meta = joblib.load(ROOT / "models" / f"{label}_v9_meta.pkl")
+    bundles[korean] = meta
+    used = meta["parts"]["base" if meta["mix_weight"] >= 0.5 else "ratio"]
+    rows.append({
+        "대상": korean,
+        "표본": meta["n_samples"],
+        "base 비중": meta["mix_weight"],
+        "쓰는 피처 수": len(used["features"]),
+        "반감기": meta["half_life"] or "없음",
+        "시간 R2": round(meta["time_r2"], 3),
+        "시간 MAE(억)": round(meta["time_mae_억"], 2),
+        "시간 편향(억)": round(meta["time_bias_억"], 2),
+        "무작위 R2": round(meta["r2"], 3),
+    })
+
+display(pd.DataFrame(rows).set_index("대상"))
+
+for korean, meta in bundles.items():
+    detail = " / ".join(f"{part}: {spec['method']}" for part, spec in meta["parts"].items())
+    print(f"{korean}  {detail}")
+"""))
+
+    C.append(md("""
+## 12. 2차 보정 — 구단별 제시가
 
 예측 연봉은 '시장 평균'이다. 실제 협상가는 구단 사정에 따라 다르다.
 같은 선수라도 그 포지션이 급한 구단과 이미 채워진 구단이 부르는 값이 다르다.
@@ -531,22 +580,31 @@ display(offers[["team_name", "need", "win_now_score", "cap_space_score", "제시
     C.append(md("""
 ## 정리
 
-| 대상 | 최종 모델 | R² | RMSE | MAE | 표본 |
+서비스가 쓰는 최종 구성이다. 수치는 시간 순서 검증이다.
+
+| 대상 | 최종 구성 | 시간 R² | 시간 MAE | 시간 편향 | 표본 |
 |---|---|---|---|---|---|
-| 타자 | LightGBM + Ridge 블렌드 | 0.618 | 4.53억 | 3.01억 | 93명 |
-| 투수 | XGBoost + Ridge 블렌드 | 0.645 | 2.77억 | 2.07억 | 46명 |
+| 타자 | ratio 단독(LightGBM+Ridge) · 전체 피처 · 반감기 3년 | 0.627 | 3.26억 | -0.70억 | 136명 |
+| 투수 | base 0.75 + ratio 0.25(XGBoost+Ridge) · 상위 25개 | 0.477 | 2.68억 | -0.40억 | 72명 |
+
+노트북에서 만든 기본형의 수치는 7절 출력에 있다.
+그쪽은 무작위 K-fold라 채점 방식이 달라 위 표와 직접 비교하면 안 된다.
 
 **왜 이 구성인가**
 
 - **타자/투수 분리** — 평가 지표 자체가 다르다. 한 모델에 넣으면 서로를 방해한다
 - **로그 변환** — 연봉 분포가 오른쪽으로 크게 치우쳐 있다 (03)
-- **반복 교차검증** — 표본이 100명 미만이라 단일 분할은 점수가 흔들린다
+- **반복 교차검증** — 표본이 작아 단일 분할은 점수가 흔들린다
 - **블렌딩** — 트리와 선형의 성격이 달라 섞으면 서로의 약점을 덮는다
 - **누수 제거** — 총액·계약연수를 넣으면 지표가 치솟지만 서비스에서는 못 쓴다
+- **시장 수준 대비 비율(ratio)** — 트리가 못 하는 인플레이션 외삽을 시장 지표가 맡는다
+- **최근 계약 가중(타자)** — 옛 계약을 버리지 않고 비중만 낮춘다
 
 **남은 한계**
 
-- 표본이 절대적으로 작다. 특히 투수 46명은 피처 하나에도 지표가 크게 흔들린다
+- 표본이 절대적으로 작다. 특히 투수 72명은 피처 하나에도 지표가 크게 흔들린다
+- 네이버는 타자 WAR를 2017년부터, 투수 WAR를 2014년부터만 준다.
+  그 이전 FA 계약은 최상위 피처 없이 학습에 들어간다
 - 부상 이력, 협상 과정, 원소속팀 프리미엄 같은 비성적 요인은 담지 못했다
 - 예측 상한이 실제 최고 계약 근처라, 그 위 구간은 표본이 없어 외삽이다
 """))

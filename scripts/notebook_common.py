@@ -1,9 +1,9 @@
 """노트북 생성에 쓰는 공용 조각 — 셀 헬퍼와 모든 노트북의 첫 셀.
 
-원본 설명은 gen_notebooks_v8.py에 있다.
+원본 설명은 gen_notebooks.py에 있다.
 
 (원래 설명)
-v8 파이프라인 기준 노트북 생성.
+현재 파이프라인(학습셋 v10 · 모델 v9) 기준 노트북 생성.
 
 notebooks/에 있던 3개는 7월 v4/v5 시절 기록이고 fa_contracts_v3를 읽는다.
 그 뒤로 수집 누락 복구(TS-001)·생년 교정(TS-002)·스타성 재수집(TS-004)·
@@ -21,7 +21,7 @@ notebooks/에 있던 3개는 7월 v4/v5 시절 기록이고 fa_contracts_v3를 �
   notebooks/03_eda.ipynb
   notebooks/04_model_train.ipynb
 
-실행: .venv/bin/python scripts/gen_notebooks_v8.py
+실행: .venv/bin/python -m scripts.gen_notebooks
 """
 
 from __future__ import annotations

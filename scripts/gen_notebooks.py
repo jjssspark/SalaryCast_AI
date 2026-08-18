@@ -1,4 +1,4 @@
-"""v8 파이프라인 기준 노트북 생성.
+"""현재 파이프라인(학습셋 v10 · 모델 v9) 기준 노트북 생성.
 
 notebooks/에 있던 3개는 7월 v4/v5 시절 기록이고 fa_contracts_v3를 읽는다.
 그 뒤로 수집 누락 복구(TS-001)·생년 교정(TS-002)·스타성 재수집(TS-004)·
@@ -16,7 +16,7 @@ notebooks/에 있던 3개는 7월 v4/v5 시절 기록이고 fa_contracts_v3를 �
 노트북은 데이터를 읽기만 한다. models/와 data/에는 쓰지 않는다.
 
 실행:
-  .venv/bin/python -m scripts.gen_notebooks_v8
+  .venv/bin/python -m scripts.gen_notebooks
   .venv/bin/python -m jupyter nbconvert --to notebook --execute --inplace notebooks/0*.ipynb
 """
 

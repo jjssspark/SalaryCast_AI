@@ -1,6 +1,6 @@
 """01·02 노트북 셀 내용 — 데이터 확인과 전처리.
 
-셀 본문이 길어 gen_notebooks_v8.py에서 떼어냈다. 한 파일 800줄 규약을 넘겼다.
+셀 본문이 길어 gen_notebooks.py에서 떼어냈다. 한 파일 800줄 규약을 넘겼다.
 """
 
 from __future__ import annotations
@@ -31,17 +31,20 @@ KBO FA 선수의 연평균 계약금을 예측하기 위해 모은 원천 데이
 
 `_raw_all`은 처음 수집한 것, `_raw_v2`는 다시 수집한 것이다.
 두 파일을 같이 두는 이유는 다음 절에서 비교하기 위해서다.
+
+이 비교는 2013~2026 구간으로 한다. 지금 쓰는 시즌 스탯은 나중에 2010년까지
+더 넓혀 받은 `_2010_2026_v4`이고, 아래에서 로드하는 것도 그쪽이다.
 """))
     C.append(code("""
 raw_old = pd.read_csv(DATA / "naver_hitter_2013_2026_raw_all.csv")
 raw_new = pd.read_csv(DATA / "naver_hitter_2013_2026_raw_v2.csv")
-seasons_h = pd.read_csv(DATA / "hitter_season_stats_2013_2026_v3.csv")
-seasons_p = pd.read_csv(DATA / "pitcher_season_stats_2013_2026_v3.csv")
-fa = pd.read_csv(DATA / "fa_contracts_v4.csv")
+seasons_h = pd.read_csv(DATA / "hitter_season_stats_2010_2026_v4.csv")
+seasons_p = pd.read_csv(DATA / "pitcher_season_stats_2010_2026_v4.csv")
+fa = pd.read_csv(DATA / "fa_contracts_v7.csv")
 
 for label, frame in [("타자 원본(구)", raw_old), ("타자 원본(신)", raw_new),
-                     ("타자 시즌스탯 v3", seasons_h), ("투수 시즌스탯 v3", seasons_p),
-                     ("FA 계약 v4", fa)]:
+                     ("타자 시즌스탯 v4", seasons_h), ("투수 시즌스탯 v4", seasons_p),
+                     ("FA 계약 v7", fa)]:
     print(f"{label:16s} {frame.shape[0]:5d}행 {frame.shape[1]:3d}컬럼")
 """))
 
@@ -101,14 +104,15 @@ plt.show()
 """))
 
     C.append(md("""
-## 4. 정답(타깃) 데이터 — FA 계약 140건
+## 4. 정답(타깃) 데이터 — FA 계약 210건
 
 `annual_avg_salary`가 예측 타깃이다. 단위는 **억 원**이고,
 총액이 아니라 계약 기간으로 나눈 연평균이다.
 """))
     C.append(code("""
 print(f"FA 계약 {len(fa)}건 / {fa.fa_year.min()}~{fa.fa_year.max()}년")
-print(f"타자 {(fa.position != '투수').sum()}건 · 투수 {(fa.position == '투수').sum()}건")
+# position은 코드다 — P 투수, C 포수, 1B/2B/3B/SS 내야, OF 외야, IF 내야 유틸
+print(f"타자 {(fa.position != 'P').sum()}건 · 투수 {(fa.position == 'P').sum()}건")
 display(fa.annual_avg_salary.describe().round(2).to_frame("연평균 계약금(억)"))
 display(fa.nlargest(5, "annual_avg_salary")[
     ["player_name", "fa_year", "position", "contract_years",
@@ -139,16 +143,16 @@ print("소수의 대형 계약이 평균을 끌어올린다. 03에서 로그 변
 
 - 처음 수집은 **연도당 선수의 상당수가 빠져 있었다.** 재수집으로 복구했다 (TS-001)
 - 결측은 비율 스탯에 몰려 있고, 타석이 극히 적은 시즌에서 생긴다
-- 타깃은 140건이고 **오른쪽으로 크게 치우친 분포**다 → 로그 변환 검토 대상
+- 타깃은 210건이고 **오른쪽으로 크게 치우친 분포**다 → 로그 변환 검토 대상
 
-다음: `02_preprocessing.ipynb` — 이 데이터로 학습셋 v8을 만든다.
+다음: `02_preprocessing.ipynb` — 이 데이터로 학습셋 v10을 만든다.
 """))
     return C
 
 
 def notebook_02() -> list[dict]:
     C = [md("""
-# 02. 전처리 — 학습셋 v8 만들기
+# 02. 전처리 — 학습셋 v10 만들기
 
 01에서 확인한 데이터를 모델이 먹을 수 있는 형태로 바꾼다.
 
@@ -196,15 +200,15 @@ if len(changed):
 """))
 
     C.append(md("""
-## 2. 학습셋 v8 로드
+## 2. 학습셋 v10 로드
 
 3년 집계는 `scripts/build_training_v8.py`가 만든다.
 FA 직전 3시즌을 평균·합으로 접고, 부상 등으로 시즌이 비면 있는 시즌만 쓴다.
 여기서는 만들어진 결과를 확인한다.
 """))
     C.append(code("""
-hitters = pd.read_csv(DATA / "hitter_training_v8.csv")
-pitchers = pd.read_csv(DATA / "pitcher_training_v8.csv")
+hitters = pd.read_csv(DATA / "hitter_training_v10.csv")
+pitchers = pd.read_csv(DATA / "pitcher_training_v10.csv")
 
 print(f"타자 {hitters.shape[0]}명 / {hitters.shape[1]}컬럼")
 print(f"투수 {pitchers.shape[0]}명 / {pitchers.shape[1]}컬럼")
@@ -254,7 +258,7 @@ print(f"수상 이력이 전혀 없는 FA 선수 {(star == 0).sum()}명 / {len(s
 세이브가 많은 마무리와 이닝이 많은 선발을 같은 잣대로 보면 안 된다.
 
 역할별로 **모델을 3개 만들지 않고 피처 하나로 넣는다.**
-KBO FA 투수는 표본이 46명뿐이라 3분할하면 한 덩어리가 15명 안팎이 되어
+KBO FA 투수는 표본이 72명뿐이라 3분할하면 한 덩어리가 20명 안팎이 되어
 모델이 패턴을 못 잡는다.
 """))
     C.append(code("""
