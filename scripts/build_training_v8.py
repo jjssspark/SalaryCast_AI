@@ -13,12 +13,14 @@ v7 대비 달라진 것:
 - 투수 스탯 추가 (QS, 삼진, 볼넷, K/9, BB/9, K/BB, 경기당 이닝)
 
 출력:
-  data/hitter_training_v9.csv
-  data/pitcher_training_v9.csv
+  data/hitter_training_v10.csv
+  data/pitcher_training_v10.csv
 
-파일명이 v9인 이유는 피처 구성이 바뀌어서가 아니다. 피처는 v8 그대로고, 입력인
-FA 계약이 140건에서 175건으로 늘었다(2016·2017 추가). 기존 v8 파일은 그때 발행한
-리포트(output/reports/accuracy_v8.md, experiment_v9.md)가 그대로 재현되도록 남겨 둔다.
+파일명 번호는 피처 구성이 아니라 입력 계약 수를 따른다. 피처는 v8 그대로다.
+  v8  계약 140건 (2018~2026)
+  v9  계약 175건 (2016·2017 추가)
+  v10 계약 210건 (2014·2015 추가, 시즌 스탯을 2010년까지 넓힘)
+앞 버전 파일은 그때 발행한 리포트가 그대로 재현되도록 남겨 둔다.
 """
 
 from __future__ import annotations
@@ -113,9 +115,9 @@ def main() -> None:
     print("  학습 데이터 v8 조립")
     print("=" * 62)
 
-    fa = pd.read_csv(DATA_DIR / "fa_contracts_v6.csv")
-    h_seasons = pd.read_csv(DATA_DIR / "hitter_season_stats_2013_2026_v3.csv")
-    p_seasons = pd.read_csv(DATA_DIR / "pitcher_season_stats_2013_2026_v3.csv")
+    fa = pd.read_csv(DATA_DIR / "fa_contracts_v7.csv")
+    h_seasons = pd.read_csv(DATA_DIR / "hitter_season_stats_2010_2026_v4.csv")
+    p_seasons = pd.read_csv(DATA_DIR / "pitcher_season_stats_2010_2026_v4.csv")
 
     fa_pitchers = fa[fa["position"] == "P"]
     fa_hitters = fa[fa["position"] != "P"]
@@ -125,8 +127,8 @@ def main() -> None:
     hitters, h_skipped = build(fa_hitters, h_seasons, awards, False)
     pitchers, p_skipped = build(fa_pitchers, p_seasons, awards, True)
 
-    h_out = DATA_DIR / "hitter_training_v9.csv"
-    p_out = DATA_DIR / "pitcher_training_v9.csv"
+    h_out = DATA_DIR / "hitter_training_v10.csv"
+    p_out = DATA_DIR / "pitcher_training_v10.csv"
     hitters.to_csv(h_out, index=False, encoding="utf-8-sig")
     pitchers.to_csv(p_out, index=False, encoding="utf-8-sig")
 

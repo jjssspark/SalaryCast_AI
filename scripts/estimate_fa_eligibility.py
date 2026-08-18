@@ -21,7 +21,7 @@ KBO FA 자격은 1군 등록일수 145일을 한 시즌으로 쳐서 고졸 8시
 이 값은 추정이다. 조사한 값과 섞지 않으려고 파일을 따로 둔다.
 화면은 이 파일에서 온 연도에 '추정' 표시를 붙인다.
 
-입력: data/player_master.csv, fa_contracts_v6.csv,
+입력: data/player_master.csv, fa_contracts_v7.csv,
       future_fa_candidates_v2.csv, non_fa_extensions.csv
 출력: data/fa_eligibility_estimated.csv
 """
@@ -46,7 +46,7 @@ def _read(name: str) -> pd.DataFrame:
 
 def main() -> None:
     master = _read("player_master.csv")
-    fa = _read("fa_contracts_v6.csv")
+    fa = _read("fa_contracts_v7.csv")
     future = _read("future_fa_candidates_v2.csv")
     extensions = _read("non_fa_extensions.csv")
 

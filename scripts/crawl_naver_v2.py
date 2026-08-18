@@ -1,5 +1,5 @@
 """
-네이버 스포츠 KBO 전 선수 재수집 (2013~2026)
+네이버 스포츠 KBO 전 선수 재수집 (2010~2026)
 
 기존 crawl_extend.py를 대체한다. 두 가지가 달라졌다.
 1. API 파라미터가 sortField/sortDirection -> field/direction 으로 바뀌어 기존 스크립트는 400을 받는다.
@@ -9,8 +9,8 @@
 사진 테이블은 scripts/build_season_stats_v3.py에서 이 원시 파일을 읽어 만든다.
 
 출력:
-  data/naver_hitter_2013_2026_raw_v2.csv
-  data/naver_pitcher_2013_2026_raw_v2.csv
+  data/naver_hitter_2010_2026_raw_v2.csv
+  data/naver_pitcher_2010_2026_raw_v2.csv
 """
 
 from __future__ import annotations
@@ -31,7 +31,14 @@ HEADERS = {
     "Referer": "https://m.sports.naver.com/kbaseball/record/kbo",
 }
 
-YEARS = list(range(2013, 2027))
+# 2010년부터 받는다. FA 계약은 직전 3시즌으로 피처를 만들므로, 2010년 시즌이
+# 있어야 2013년 FA를 담을 수 있다. 2009년까지도 API는 응답하지만 그해 FA
+# 계약(2010년 적용)은 담을 수 없어 의미가 없다.
+#
+# WAR는 2017년부터만 온다. 그 이전 시즌은 전 선수 0으로 내려오고,
+# build_season_stats_v3가 그런 해를 결측으로 바꾼다. 2010~2016년 FA 계약은
+# 최상위 피처인 WAR 없이 학습에 들어간다.
+YEARS = list(range(2010, 2027))
 PAGE_SIZE = 500
 
 # WAR 정렬만으로는 기록이 극소량인 선수가 빠질 수 있어 출전 기준 정렬을 함께 돈다.
@@ -106,7 +113,7 @@ def crawl(player_type: str, sorts: list[str]) -> pd.DataFrame:
 
 def main() -> None:
     print("=" * 62)
-    print("  네이버 KBO 전 선수 재수집 (2013~2026)")
+    print("  네이버 KBO 전 선수 재수집 (2010~2026)")
     print("=" * 62)
 
     print("\n[1/2] 타자")
@@ -115,8 +122,8 @@ def main() -> None:
     print("\n[2/2] 투수")
     pitchers = crawl("PITCHER", PITCHER_SORTS)
 
-    hitter_out = DATA_DIR / "naver_hitter_2013_2026_raw_v2.csv"
-    pitcher_out = DATA_DIR / "naver_pitcher_2013_2026_raw_v2.csv"
+    hitter_out = DATA_DIR / "naver_hitter_2010_2026_raw_v2.csv"
+    pitcher_out = DATA_DIR / "naver_pitcher_2010_2026_raw_v2.csv"
 
     hitters.to_csv(hitter_out, index=False, encoding="utf-8-sig")
     pitchers.to_csv(pitcher_out, index=False, encoding="utf-8-sig")

@@ -6,7 +6,7 @@
   scripts/build_training_v8.py            -> build_hitter_row / build_pitcher_row
 
 데이터 파일을 직접 read/write하지 않는다. 호출부가 넘긴 DataFrame만 가공한다.
-입력은 data/*_season_stats_2013_2026_v3.csv 스키마를 따른다.
+입력은 data/*_season_stats_2010_2026_v4.csv 스키마를 따른다.
 
 이전 구현에서 고친 것:
 1. market_level이 groupby(fa_year)로 타깃 중앙값을 넣어 정답을 흘렸다. 직전 연도들만 쓰도록 바꿨다.
@@ -138,7 +138,19 @@ def select_recent_seasons(
     짧은 시즌의 영향은 대신 aggregate_seasons에서 출전량 가중으로 줄인다.
     """
     eligible = rows[rows["collect_year"].between(base_year - lookback, base_year)]
-    return eligible.sort_values("collect_year", ascending=False).head(window)
+    selected = eligible.sort_values("collect_year", ascending=False).head(window)
+
+    # 최근 window개 시즌 안에 한 번도 안 뛴 선수는 아무것도 돌려주지 않는다.
+    # lookback이 5년이라 그 사이 한 시즌만 걸려도 행이 만들어지는데, 그 기록으로
+    # 지금의 몸값을 설명할 수는 없다. 시즌 데이터를 2010년까지 넓히자 이대호
+    # 2017년 계약(37.5억)이 2011년 시즌 하나로 학습에 들어왔다. 그전에는 2011년
+    # 데이터가 없어서 우연히 걸러졌을 뿐, 규칙이 막고 있던 게 아니다.
+    #
+    # 해외에 다녀온 선수는 남는다. 김현수 2018년 계약은 2013~2015 세 시즌이
+    # 붙는데, 실제로 시장도 그 성적을 보고 값을 매겼다.
+    if selected.empty or int(selected["collect_year"].max()) < base_year - (window - 1):
+        return selected.iloc[0:0]
+    return selected
 
 
 def resolve_player_id(

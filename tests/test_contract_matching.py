@@ -1,7 +1,7 @@
 """FA 계약을 붙일 때 동명이인의 계약이 딸려오지 않는가.
 
 투수 김현수의 카드에 타자 김현수의 16.67억 계약이 붙어 "고평가 계약"으로 표시된 적이
-있다. 이름으로 계약을 찾았기 때문이다. 지금은 fa_contracts_v6.csv에 player_id가
+있다. 이름으로 계약을 찾았기 때문이다. 지금은 fa_contracts_v7.csv에 player_id가
 박혀 있어 그것으로만 맞춘다. 이 테스트는 그 player_id가 실제로 맞게 들어갔는지를
 확인한다.
 
@@ -20,10 +20,10 @@ from src.serving import _past_contract
 DATA = Path("data")
 
 SOURCES = {
-    "fa": "fa_contracts_v6.csv",
+    "fa": "fa_contracts_v7.csv",
     "master": "player_master.csv",
-    "hitter_seasons": "hitter_season_stats_2013_2026_v3.csv",
-    "pitcher_seasons": "pitcher_season_stats_2013_2026_v3.csv",
+    "hitter_seasons": "hitter_season_stats_2010_2026_v4.csv",
+    "pitcher_seasons": "pitcher_season_stats_2010_2026_v4.csv",
 }
 
 

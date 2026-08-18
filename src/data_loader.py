@@ -51,7 +51,7 @@ def load_data():
         _read("teams.csv"),
         _read("position_need.csv"),
         _read("future_fa_candidates_v2.csv"),
-        _read("fa_contracts_v6.csv"),
+        _read("fa_contracts_v7.csv"),
         _read("fa_eligibility_estimated.csv"),
     )
 
@@ -59,8 +59,8 @@ def load_data():
 @st.cache_data
 def load_season_stats():
     return (
-        _read("hitter_season_stats_2013_2026_v3.csv"),
-        _read("pitcher_season_stats_2013_2026_v3.csv"),
+        _read("hitter_season_stats_2010_2026_v4.csv"),
+        _read("pitcher_season_stats_2010_2026_v4.csv"),
     )
 
 
@@ -80,7 +80,7 @@ def load_extensions() -> pd.DataFrame:
     """비FA 다년계약. FA 계약과 섞지 않는다.
 
     FA를 거치지 않고 구단과 장기 계약을 맺은 선수는 계약 기간 동안 시장에 나오지
-    않는다. fa_contracts_v6.csv에 넣으면 FA가 아닌 계약이 학습 정답에 섞이므로
+    않는다. fa_contracts_v7.csv에 넣으면 FA가 아닌 계약이 학습 정답에 섞이므로
     파일을 따로 둔다. 화면에서만 쓴다.
     """
     path = DATA / "non_fa_extensions.csv"

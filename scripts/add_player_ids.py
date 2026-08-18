@@ -53,8 +53,8 @@ def resolve_future(future: pd.DataFrame, master: pd.DataFrame) -> pd.Series:
 
 def main() -> None:
     master = _read("player_master.csv")
-    hitters = _read("hitter_season_stats_2013_2026_v3.csv")
-    pitchers = _read("pitcher_season_stats_2013_2026_v3.csv")
+    hitters = _read("hitter_season_stats_2010_2026_v4.csv")
+    pitchers = _read("pitcher_season_stats_2010_2026_v4.csv")
 
     fa = _read("fa_contracts_v4.csv")
     fa.insert(1, "player_id", resolve_contracts(fa, hitters, pitchers))

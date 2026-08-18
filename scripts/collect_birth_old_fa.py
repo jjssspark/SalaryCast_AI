@@ -1,4 +1,4 @@
-"""FA 2016·2017 계약자 35명의 생년을 채운다.
+"""FA 2014~2017 계약자의 생년을 채운다.
 
 왜 따로 도는가. collect_player_birth.py는 latest_year >= 2025인 현역만 대상으로
 한다. 화면에 뜰 사람만 채우면 됐기 때문이다. 그런데 2016·2017 FA 계약자는 대부분
@@ -7,7 +7,7 @@
 조회 방식과 동명이인 판정 규칙은 collect_player_birth.py 것을 그대로 쓴다.
 결과는 player_birth_manual.csv에 덧붙인다(기존 행은 건드리지 않는다).
 
-입력: data/fa_contracts_v6.csv, player_master.csv
+입력: data/fa_contracts_v7.csv, player_master.csv
 출력: data/player_birth_manual.csv (갱신)
 """
 
@@ -25,7 +25,7 @@ from collect_player_birth import (  # noqa: E402
 )
 
 DATA = Path(__file__).parent.parent / "data"
-NEW_FA_YEARS = (2016, 2017)
+NEW_FA_YEARS = (2014, 2015, 2016, 2017)
 
 # 우리 시즌 데이터가 시작하는 해. first_year가 이 값이면 실제 데뷔 연도가 아니라
 # '데이터가 여기서부터라 여기서 처음 보인다'는 뜻이다. collect_player_birth.resolve는
@@ -37,6 +37,9 @@ WINDOW_START = 2013
 # player_id가 KBO 선수 ID와 같아 페이지를 직접 열어 대조했다.
 #   https://www.koreabaseball.com/Record/Retire/Hitter.aspx?playerId=<id>
 MANUAL_BIRTH = {
+    70615: 1981,  # 강영식 1981-06-17
+    74513: 1985,  # 장원준 1985-07-31
+    71848: 1981,  # 조동화 1981-03-22
     71118: 1983,  # 이동현 1983-01-12
     77248: 1985,  # 오재원 1985-02-09
     74846: 1981,  # 박정권 1981-07-21
@@ -46,7 +49,7 @@ MANUAL_BIRTH = {
 
 
 def main() -> None:
-    fa = pd.read_csv(DATA / "fa_contracts_v6.csv", encoding="utf-8-sig")
+    fa = pd.read_csv(DATA / "fa_contracts_v7.csv", encoding="utf-8-sig")
     master = pd.read_csv(DATA / "player_master.csv", encoding="utf-8-sig")
     known = pd.read_csv(DATA / "player_birth_manual.csv", encoding="utf-8-sig")
 

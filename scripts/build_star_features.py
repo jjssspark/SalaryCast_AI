@@ -1,7 +1,7 @@
 """수상 이력을 선수(player_id)에 붙인다.
 
 실행: .venv/bin/python scripts/build_star_features.py
-입력: data/kbo_awards.csv, data/player_master.csv, data/*_season_stats_2013_2026_v3.csv
+입력: data/kbo_awards.csv, data/player_master.csv, data/*_season_stats_2010_2026_v4.csv
 출력: data/star_features_v2.csv  (player_id, player_name, year, award)
 
 수집(collect_star_features.py)과 나눠 둔다. 이름을 선수에 붙이는 규칙만 고칠 때
@@ -36,7 +36,7 @@ CAREER_BACKREACH = 14
 def load_seasons() -> pd.DataFrame:
     frames = []
     for name in ("hitter", "pitcher"):
-        path = DATA_DIR / f"{name}_season_stats_2013_2026_v3.csv"
+        path = DATA_DIR / f"{name}_season_stats_2010_2026_v4.csv"
         frames.append(
             pd.read_csv(path)[["player_id", "player_name", "collect_year", "team", "games"]]
         )

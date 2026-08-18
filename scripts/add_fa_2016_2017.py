@@ -81,8 +81,8 @@ def _read(name: str) -> pd.DataFrame:
 def main() -> None:
     fa = _read("fa_contracts_v5.csv")
     master = _read("player_master.csv")
-    hitters = _read("hitter_season_stats_2013_2026_v3.csv")
-    pitchers = _read("pitcher_season_stats_2013_2026_v3.csv")
+    hitters = _read("hitter_season_stats_2010_2026_v4.csv")
+    pitchers = _read("pitcher_season_stats_2010_2026_v4.csv")
     birth = _read("player_birth_manual.csv").dropna(subset=["birth_year"])
     birth_by_id = {int(r.player_id): int(r.birth_year) for r in birth.itertuples()}
 

@@ -146,7 +146,7 @@ def _is_hitter(context: Context, player_id: int) -> bool:
 def _past_contract(context: Context, player_id: int) -> pd.Series | None:
     """이 선수가 실제로 맺은 FA 계약 중 가장 최근 건.
 
-    계약 파일(fa_contracts_v6.csv)에 player_id가 박혀 있어 그대로 맞춘다.
+    계약 파일(fa_contracts_v7.csv)에 player_id가 박혀 있어 그대로 맞춘다.
     예전에는 이름으로 찾고 출전 경기 수·소속팀으로 동명이인을 갈랐는데,
     같은 이름이 61쌍이라 시즌 기록이 한 줄만 바뀌어도 다른 사람의 계약이
     붙을 수 있었다. 확정한 값을 파일에 적어두는 쪽으로 옮겼다

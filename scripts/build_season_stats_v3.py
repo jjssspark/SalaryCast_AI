@@ -10,8 +10,8 @@
 이닝은 "187 1/3" 형태 문자열이라 실수로 바꿔서 저장한다.
 
 출력:
-  data/hitter_season_stats_2013_2026_v3.csv
-  data/pitcher_season_stats_2013_2026_v3.csv
+  data/hitter_season_stats_2010_2026_v4.csv
+  data/pitcher_season_stats_2010_2026_v4.csv
   data/player_master.csv
 """
 
@@ -343,11 +343,11 @@ def build_master(hitters: pd.DataFrame, pitchers: pd.DataFrame) -> pd.DataFrame:
 
 def main() -> None:
     print("=" * 62)
-    print("  시즌 스탯 정제 v3")
+    print("  시즌 스탯 정제 v4 (2010~2026)")
     print("=" * 62)
 
-    raw_h = pd.read_csv(DATA_DIR / "naver_hitter_2013_2026_raw_v2.csv")
-    raw_p = pd.read_csv(DATA_DIR / "naver_pitcher_2013_2026_raw_v2.csv")
+    raw_h = pd.read_csv(DATA_DIR / "naver_hitter_2010_2026_raw_v2.csv")
+    raw_p = pd.read_csv(DATA_DIR / "naver_pitcher_2010_2026_raw_v2.csv")
 
     completion = season_completion_ratio(raw_h)
 
@@ -362,8 +362,8 @@ def main() -> None:
 
     photos = build_photo_table(raw_h, raw_p)
 
-    h_out = DATA_DIR / "hitter_season_stats_2013_2026_v3.csv"
-    p_out = DATA_DIR / "pitcher_season_stats_2013_2026_v3.csv"
+    h_out = DATA_DIR / "hitter_season_stats_2010_2026_v4.csv"
+    p_out = DATA_DIR / "pitcher_season_stats_2010_2026_v4.csv"
     m_out = DATA_DIR / "player_master.csv"
     photo_out = DATA_DIR / "player_photos.csv"
 

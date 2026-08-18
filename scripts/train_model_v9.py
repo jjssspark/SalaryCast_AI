@@ -55,10 +55,10 @@ from src.features import (  # noqa: E402
 # 피처 수는 투수만 자른다. v9 초기에는 15개였는데 너무 과했다. 25개가 최적이고
 # 그 주변(20~47)이 모두 15개보다 낫다. 타자는 자르면 전 구간에서 나빠진다.
 GROUPS = [
-    {"label": "hitter", "korean": "타자", "csv": "hitter_training_v9.csv",
+    {"label": "hitter", "korean": "타자", "csv": "hitter_training_v10.csv",
      "pct_cols": HITTER_PCT_COLS, "group_col": "position",
      "top_k": None, "mix_weight": 0.0},
-    {"label": "pitcher", "korean": "투수", "csv": "pitcher_training_v9.csv",
+    {"label": "pitcher", "korean": "투수", "csv": "pitcher_training_v10.csv",
      "pct_cols": PITCHER_PCT_COLS, "group_col": "pitcher_role",
      "top_k": 25, "mix_weight": 0.75},
 ]
