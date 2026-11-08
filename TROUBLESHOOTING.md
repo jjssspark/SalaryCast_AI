@@ -6,6 +6,7 @@
 
 | 번호 | 제목 | 날짜 | 분류 |
 |---|---|---|---|
+| TS-016 | 배포 앱이 12시간마다 잠듦 — HTTP ping은 방문으로 안 쳐서 브라우저로 깨운다 | 2026-11-08 | 배포 |
 | TS-015 | 시즌 데이터를 과거로 넓히자 6년 전 기록 하나로 37.5억 계약을 학습 | 2026-08-18 | 데이터 |
 | TS-014 | 투수 67명이 타자로 분류돼 타자 모델로 예측됨 — 동점을 정렬 순서로 갈랐다 | 2026-08-18 | 데이터 / 모델 |
 | TS-013 | 학습은 타자·투수를 나눠 센 시장 수준을, 서빙은 합쳐 센 값을 썼다 | 2026-08-17 | 모델 / 데이터 |
@@ -1526,3 +1527,122 @@ active_seasons
 **전수로 세어 보고 나서 규칙을 정했다.** 처음 떠오른 안(lookback 축소)은
 멀쩡한 김현수까지 날렸을 것이다. 두 건뿐이라 눈으로 볼 수 있었고, 그래서
 '개수'가 아니라 '최근성'이 기준이라는 걸 알았다.
+
+## TS-016 — 배포 앱이 12시간마다 잠듦 — HTTP ping은 방문으로 안 쳐서 브라우저로 깨운다
+
+- **날짜**: 2026-11-08
+- **분류**: 배포
+
+### 증상
+
+약 2.5개월 만에 포트폴리오 링크(`https://stovelens-ai.streamlit.app/`)를 열었더니
+앱 대신 Streamlit Cloud의 휴면 안내 화면이 떴다. "Yes, get this app back up!" 버튼을
+눌러야 깨어나고, 그 뒤에도 수십 초 기다려야 앱이 뜬다. 채용 담당자가 링크를 눌렀을 때
+그 화면을 볼 수 있다는 게 문제였다.
+
+터미널에서 확인하면 앱 주소가 인증 페이지로 넘어간다.
+
+```
+$ curl -sI https://stovelens-ai.streamlit.app/
+HTTP/2 303
+location: https://share.streamlit.io/-/auth/app?redirect_uri=https%3A%2F%2Fstovelens-ai.streamlit.app%2F
+```
+
+### 재현 조건
+
+Streamlit Community Cloud 무료 플랜. 공식 문서 기준 12시간 동안 방문이 없으면 앱이
+잠든다(예전엔 24시간이었다가 줄었다). 사람이 안 들어가는 포트폴리오 앱은 사실상
+항상 잠들어 있는 상태가 된다.
+
+### 원인
+
+- **표면 원인**: 무료 플랜의 휴면 정책. 바꿀 수 없다.
+- **근본 원인**: 방문 집계가 HTTP 요청이 아니라 **웹소켓 세션** 기준이다. `curl`이나
+  `urllib`로 주소를 치면 정적 셸 페이지만 받고 끝나서 방문으로 안 잡힌다. 그래서
+  흔히 쓰는 "크론으로 ping" 방식이 여기선 소용없다. 이건 커뮤니티 글 여러 건과
+  직접 확인(아래)으로 확인한 것이다.
+- 앱이 깨어 있어도 메인 프레임에는 Streamlit DOM이 없다. Community Cloud가 앱을
+  `/~/+/` 경로의 iframe 안에 넣어 띄우기 때문이다. 직접 확인한 사실.
+
+```
+FRAME url=https://stovelens-ai.streamlit.app/        ready=0
+FRAME url=https://qjmnz4vd2y07.statuspage.io/embed/frame ready=0
+FRAME url=https://stovelens-ai.streamlit.app/~/+/    ready=1  buttons=['Fork']
+```
+
+### 시도했지만 안 된 것
+
+- **단순 HTTP 요청으로 깨우기**: 위 이유로 방문 집계가 안 된다. 303만 받는다.
+- **`gautamkrishnar/keepalive-workflow` 액션 사용**: 공개 저장소가 60일간 커밋이
+  없으면 GitHub가 schedule 트리거를 꺼버리는데, 이걸 막아주는 액션으로 유명하다.
+  그런데 가져오려 하니 저장소 자체가 차단돼 있었다.
+
+```
+$ gh api repos/gautamkrishnar/keepalive-workflow/contents/action.yml
+gh: Repository access blocked (HTTP 403)
+{"message":"Repository access blocked","block":{"reason":"tos","created_at":"2025-04-21T23:04:42Z"}}
+```
+
+  `uses:`로 참조해도 같은 이유로 실패했을 것이다. 직접 짜는 쪽으로 바꿨다.
+
+- **다른 호스팅으로 이전(Hugging Face Spaces, Oracle Always Free)**: 전부 공짜지만
+  배포를 다시 짜야 하고, HF는 48시간 후 잠들며, Oracle은 카드 등록과 서버 운영이
+  붙는다. "지금 있는 걸 크게 안 바꾼다"는 조건에 안 맞아 버렸다.
+
+### 해결
+
+`.github/workflows/keep-awake.yml` + `scripts/keep_awake.py`.
+
+1. GitHub Actions가 **6시간마다** Playwright(헤드리스 Chromium)로 앱에 접속한다.
+   12시간 기준에 두 배 여유.
+2. 스크립트는 모든 프레임을 돌며 `[data-testid="stAppViewContainer"]`를 찾는다.
+   iframe 안에 있어도 잡힌다.
+3. 휴면 화면이면 `get this app back up` 문구의 버튼을 눌러 최대 5분 기다린다.
+4. 끝내 안 뜨면 종료 코드 1 → Actions 실패 알림 + 스크린샷 아티팩트.
+5. 60일 무활동 문제는 두 겹으로 막는다. 워크플로우 enable API를 매번 호출하고,
+   마지막 커밋이 50일을 넘었을 때만 `.github/keepalive`에 날짜를 적어 1회 커밋한다.
+   저장소가 활발하면 커밋이 생기지 않는다.
+
+Playwright는 앱 의존성이 아니라서 `requirements.txt`에 넣지 않고 워크플로우 안에서만
+설치한다.
+
+### 검증
+
+로컬에서 실제 배포 앱에 실행:
+
+```
+$ ./pwvenv/bin/python scripts/keep_awake.py
+[keep-awake] visiting https://stovelens-ai.streamlit.app/
+[keep-awake] app is up (https://stovelens-ai.streamlit.app/)
+exit=0 elapsed=15s
+```
+
+푸시 후 `workflow_dispatch`로 수동 실행 (run 42446386245):
+
+```
+visit: success
+keepalive: success
+  ✓ Re-enable schedule
+  ✓ Commit only if repo idle for 50+ days   → "repo is active — no commit needed"
+```
+
+**검증 못 한 것**: 깨우기 버튼을 실제로 누르는 경로. 작업 중엔 앱이 이미 깨어 있어서
+잠든 상태를 만들 수 없었다. 버튼 문구는 알려진 값에 맞췄고, 틀리면 5분 뒤 실패로
+떠서 알게 된다. enable API 호출이 60일 타이머를 리셋하는지도 직접 확인한 게 아니라
+그 액션의 설명을 믿은 것이다. 그래서 50일 조건부 커밋을 안전장치로 같이 뒀다.
+
+### 추후 관리
+
+- Actions 실패 메일이 오면 ① Streamlit이 휴면 화면 문구나 구조를 바꿨는지,
+  ② Community Cloud 정책이 바뀌었는지 순서로 본다. 스크린샷 아티팩트를 먼저 연다.
+- 비공식 우회다. Streamlit이 막으면 그때 유료 호스팅(Fly.io 월 2~3달러)으로 간다.
+- `actions/checkout@v4`가 Node 20 경고를 낸다. 당장은 돌지만 언젠가 v5로 올려야 한다.
+
+### 배운 점
+
+**"살아 있다"의 정의가 플랫폼마다 다르다.** HTTP 200이 왔다고 방문으로 집계되는 게
+아니었다. 모니터링이나 keep-alive를 걸 때는 플랫폼이 무엇을 "활동"으로 세는지 먼저
+확인해야 한다. 여기선 웹소켓이었고, 그래서 브라우저가 필요했다.
+
+**검증한 것과 믿은 것을 갈라 적었다.** 앱 준비 판정은 실제로 돌려 확인했고, 깨우기
+클릭과 타이머 리셋은 못 했다. 못 한 쪽에는 안전장치를 하나 더 붙였다.
