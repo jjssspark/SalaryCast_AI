@@ -287,6 +287,12 @@ streamlit run app/app.py
 pytest tests/ -v
 ```
 
+### 배포
+
+Streamlit Community Cloud에 올라가 있다. 무료 플랜은 12시간 동안 방문이 없으면 앱을 잠재우고,
+단순 HTTP 요청은 방문으로 치지 않는다. 그래서 GitHub Actions가 6시간마다 실제 브라우저
+(Playwright)로 접속해 잠들지 않게 한다 — `.github/workflows/keep-awake.yml`, `scripts/keep_awake.py`.
+
 ### 노트북 (분석 과정)
 
 ```

@@ -1,0 +1,70 @@
+# Streamlit Community Cloud는 12시간 동안 방문이 없으면 앱을 잠재운다.
+# 단순 HTTP 요청은 방문으로 안 치기 때문에 실제 브라우저로 6시간마다 접속한다.
+name: Keep app awake
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  visit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Playwright
+        run: |
+          pip install playwright
+          playwright install --with-deps chromium
+
+      - name: Visit app (wake it if asleep)
+        env:
+          APP_URL: https://stovelens-ai.streamlit.app/
+          SCREENSHOT_PATH: keep_awake_last.png
+        run: python scripts/keep_awake.py
+
+      - name: Upload screenshot on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: keep-awake-screenshot
+          path: keep_awake_last.png
+          if-no-files-found: ignore
+
+  # 공개 저장소에 60일간 커밋이 없으면 GitHub가 schedule 트리거를 꺼버린다.
+  # 1) 워크플로우 enable API를 호출하고
+  # 2) 마지막 커밋이 50일을 넘었을 때만 날짜 파일 하나를 커밋해 활동을 남긴다.
+  keepalive:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Re-enable schedule
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/keep-awake.yml/enable"
+
+      - name: Commit only if repo idle for 50+ days
+        run: |
+          last=$(git log -1 --format=%ct)
+          days=$(( ( $(date +%s) - last ) / 86400 ))
+          echo "last commit was ${days} days ago"
+          if [ "$days" -lt 50 ]; then
+            echo "repo is active — no commit needed"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          date -u +%Y-%m-%dT%H:%M:%SZ > .github/keepalive
+          git add .github/keepalive
+          git commit -m "chore: keep scheduled workflow alive"
+          git push
